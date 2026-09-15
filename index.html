@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Top-Down — прототип</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #game {
+    background: #2a2a3e;
+    border: 2px solid #16213e;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    cursor: crosshair;
+  }
+  #help {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1.7;
+    background: rgba(0,0,0,0.55);
+    padding: 10px 14px;
+    border-radius: 6px;
+    pointer-events: none;
+  }
+  #help b { color: #ffd700; }
+</style>
+</head>
+<body>
+<canvas id="game" width="960" height="540"></canvas>
+<div id="help">
+  <b>Управление:</b><br>
+  WASD / Стрелки — движение (8 направлений)<br>
+  ЛКМ — копать / рубить<br>
+  ПКМ — поставить блок<br>
+  1–9, 0 — слот<br>
+  Колесо — слот
+</div>
+<script>
+// ============================================================
+// КОНСТАНТЫ
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const TILE = 32;
+const WORLD_W = 80;
+const WORLD_H = 40;
+
+const MOVE_SPEED = 3.2;
+const REACH = 4.5;        // радиус взаимодействия в тайлах
+const ACTION_COOLDOWN = 8;
+
+// Типы тайлов
+// solid: true — блокирует движение
+// kind: 'floor' — по нему ходят, 'wall' — стена/объект
+const TILES = {
+  0: { name: 'Трава',   color: '#5aad4a', solid: false, kind: 'floor' },
+  1: { name: 'Земля',   color: '#8B5A2B', solid: false, kind: 'floor' },
+  2: { name: 'Камень',  color: '#7a7a7a', solid: false, kind: 'floor' },
+  3: { name: 'Стена',   color: '#4a4a4a', solid: true,  kind: 'wall'  },
+  4: { name: 'Дерево',  color: '#a0522d', solid: true,  kind: 'wall'  },
+  5: { name: 'Валун',   color: '#9a9a9a', solid: true,  kind: 'wall'  },
+  6: { name: 'Песок',   color: '#e8d68a', solid: false, kind: 'floor' },
+};
+
+// ============================================================
+// МИР (плоский, без генерации)
+// ============================================================
+const world = [];
+
+function generateWorld() {
+  // Всё поле — трава
+  for (let y = 0; y < WORLD_H; y++) {
+    world[y] = [];
+    for (let x = 0; x < WORLD_W; x++) {
+      world[y][x] = 0; // трава
+    }
+  }
+
+  // Границы мира — стена
+  for (let x = 0; x < WORLD_W; x++) {
+    world[0][x] = 3;
+    world[WORLD_H - 1][x] = 3;
+  }
+  for (let y = 0; y < WORLD_H; y++) {
+    world[y][0] = 3;
+    world[y][WORLD_W - 1] = 3;
+  }
+
+  // Озеро (песок вокруг)
+  for (let y = 12; y < 18; y++) {
+    for (let x = 20; x < 28; x++) {
+      world[y][x] = 6; // песок
+    }
+  }
+
+  // Каменная площадка
+  for (let y = 22; y < 28; y++) {
+    for (let x = 40; x < 48; x++) {
+      world[y][x] = 2; // камень
+    }
+  }
+
+  // Лесок
+  const trees = [
+    [10, 8], [12, 9], [14, 7], [11, 12], [16, 11],
+    [55, 10], [58, 12], [60, 9], [62, 13], [56, 15],
+    [30, 30], [33, 31], [36, 29], [32, 34], [35, 35],
+  ];
+  for (const [x, y] of trees) {
+    world[y][x] = 4; // дерево
+  }
+
+  // Валуны
+  const rocks = [
+    [50, 20], [52, 22], [48, 24],
+    [8, 30], [10, 32], [6, 28],
+    [70, 25], [72, 27], [68, 29],
+  ];
+  for (const [x, y] of rocks) {
+    world[y][x] = 5; // валун
+  }
+
+  // Стены (развалины)
+  for (let x = 60; x < 70; x++) world[32][x] = 3;
+  for (let y = 32; y < 38; y++) world[y][60] = 3;
+}
+
+function isSolid(tx, ty) {
+  if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return true;
+  return TILES[world[ty][tx]].solid;
+}
+
+// ============================================================
+// ИГРОК
+// ============================================================
+const player = {
+  x: 5 * TILE,
+  y: 5 * TILE,
+  r: 11,              // радиус (круг)
+  vx: 0,
+  vy: 0,
+  facing: { x: 0, y: 1 },
+};
+
+// ============================================================
+// ИНВЕНТАРЬ (10 ячеек)
+// ============================================================
+const INV_SIZE = 10;
+const inventory = new Array(INV_SIZE).fill(null);
+let selectedSlot = 0;
+
+function addToInventory(type, count = 1) {
+  for (const slot of inventory) {
+    if (slot && slot.type === type && slot.count < 99) {
+      slot.count += count;
+      return true;
+    }
+  }
+  for (let i = 0; i < INV_SIZE; i++) {
+    if (!inventory[i]) {
+      inventory[i] = { type, count };
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============================================================
+// ВВОД
+// ============================================================
+const keys = {};
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (k === ' ') e.preventDefault();
+
+  if (e.key >= '1' && e.key <= '9') selectedSlot = +e.key - 1;
+  if (e.key === '0') selectedSlot = 9;
+});
+document.addEventListener('keyup', (e) => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+const mouse = { x: 0, y: 0, left: false, right: false };
+let actionCooldown = 0;
+
+canvas.addEventListener('mousemove', (e) => {
+  const r = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - r.left;
+  mouse.y = e.clientY - r.top;
+});
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button === 0) mouse.left = true;
+  if (e.button === 2) mouse.right = true;
+  actionCooldown = 0;
+  e.preventDefault();
+});
+canvas.addEventListener('mouseup', (e) => {
+  if (e.button === 0) mouse.left = false;
+  if (e.button === 2) mouse.right = false;
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('wheel', (e) => {
+  selectedSlot = (selectedSlot + (e.deltaY > 0 ? 1 : -1) + INV_SIZE) % INV_SIZE;
+  e.preventDefault();
+}, { passive: false });
+
+// ============================================================
+// КАМЕРА
+// ============================================================
+const camera = { x: 0, y: 0 };
+
+function updateCamera() {
+  const targetX = player.x - canvas.width / 2;
+  const targetY = player.y - canvas.height / 2;
+  camera.x = Math.max(0, Math.min(WORLD_W * TILE - canvas.width, targetX));
+  camera.y = Math.max(0, Math.min(WORLD_H * TILE - canvas.height, targetY));
+}
+
+// ============================================================
+// ФИЗИКА (вид сверху — 8 направлений)
+// ============================================================
+function updatePlayer() {
+  let dx = 0, dy = 0;
+
+  if (keys['a'] || keys['arrowleft'])  dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+  if (keys['w'] || keys['arrowup'])    dy -= 1;
+  if (keys['s'] || keys['arrowdown'])  dy += 1;
+
+  // Нормализация диагонали
+  if (dx !== 0 && dy !== 0) {
+    const len = Math.sqrt(dx * dx + dy * dy);
+    dx /= len;
+    dy /= len;
+  }
+
+  player.vx = dx * MOVE_SPEED;
+  player.vy = dy * MOVE_SPEED;
+
+  if (dx !== 0 || dy !== 0) {
+    player.facing.x = dx;
+    player.facing.y = dy;
+  }
+
+  // Движение по X
+  player.x += player.vx;
+  resolveAxis('x');
+
+  // Движение по Y
+  player.y += player.vy;
+  resolveAxis('y');
+}
+
+// Разрешение столкновений по одной оси
+// Игрок — круг радиуса r
+function resolveAxis(axis) {
+  const r = player.r;
+  const minTX = Math.floor((player.x - r) / TILE);
+  const maxTX = Math.floor((player.x + r) / TILE);
+  const minTY = Math.floor((player.y - r) / TILE);
+  const maxTY = Math.floor((player.y + r) / TILE);
+
+  for (let ty = minTY; ty <= maxTY; ty++) {
+    for (let tx = minTX; tx <= maxTX; tx++) {
+      if (!isSolid(tx, ty)) continue;
+
+      // Ближайшая точка тайла к центру игрока
+      const closestX = Math.max(tx * TILE, Math.min(player.x, tx * TILE + TILE));
+      const closestY = Math.max(ty * TILE, Math.min(player.y, ty * TILE + TILE));
+
+      const dx = player.x - closestX;
+      const dy = player.y - closestY;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq < r * r) {
+        const dist = Math.sqrt(distSq) || 0.001;
+
+        if (axis === 'x') {
+          // Отталкиваем по X
+          if (player.vx > 0) {
+            player.x = tx * TILE - r;
+          } else if (player.vx < 0) {
+            player.x = tx * TILE + TILE + r;
+          } else {
+            // Если стоим — выталкиваем наружу по нормали
+            player.x += (dx / dist) * (r - dist);
+          }
+          player.vx = 0;
+        } else {
+          if (player.vy > 0) {
+            player.y = ty * TILE - r;
+          } else if (player.vy < 0) {
+            player.y = ty * TILE + TILE + r;
+          } else {
+            player.y += (dy / dist) * (r - dist);
+          }
+          player.vy = 0;
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// ВЗАИМОДЕЙСТВИЕ (копать / ставить)
+// ============================================================
+function mouseTile() {
+  return {
+    tx: Math.floor((mouse.x + camera.x) / TILE),
+    ty: Math.floor((mouse.y + camera.y) / TILE),
+  };
+}
+
+function inReach(tx, ty) {
+  const tcx = tx * TILE + TILE / 2;
+  const tcy = ty * TILE + TILE / 2;
+  const dx = tcx - player.x;
+  const dy = tcy - player.y;
+  return dx * dx + dy * dy <= (REACH * TILE) ** 2;
+}
+
+function tryMine() {
+  const { tx, ty } = mouseTile();
+  if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return false;
+  if (!inReach(tx, ty)) return false;
+
+  const t = world[ty][tx];
+  if (t === 0 || t === 1 || t === 2 || t === 6) return false; // это пол — не копаем
+
+  // Собираем блок, кладём в инвентарь
+  addToInventory(t, 1);
+
+  // Заменяем на пол (трава / земля / камень — в зависимости от соседей)
+  // Простое правило: под стеной обычно пол
+  world[ty][tx] = 1; // земля
+  return true;
+}
+
+function tryPlace() {
+  const { tx, ty } = mouseTile();
+  if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return false;
+  if (!inReach(tx, ty)) return false;
+  if (world[ty][tx] !== 1 && world[ty][tx] !== 0 && world[ty][tx] !== 2 && world[ty][tx] !== 6) return false;
+
+  const slot = inventory[selectedSlot];
+  if (!slot) return false;
+
+  // Проверка: не ставим блок на игрока
+  const tcx = tx * TILE + TILE / 2;
+  const tcy = ty * TILE + TILE / 2;
+  const dx = tcx - player.x;
+  const dy = tcy - player.y;
+  const minDist = player.r + TILE / 2;
+  if (dx * dx + dy * dy < minDist * minDist) return false;
+
+  world[ty][tx] = slot.type;
+  slot.count--;
+  if (slot.count <= 0) inventory[selectedSlot] = null;
+  return true;
+}
+
+function updateInteraction() {
+  if (actionCooldown > 0) {
+    actionCooldown--;
+    return;
+  }
+  if (mouse.left) {
+    if (tryMine()) actionCooldown = ACTION_COOLDOWN;
+  } else if (mouse.right) {
+    if (tryPlace()) actionCooldown = ACTION_COOLDOWN;
+  }
+}
+
+// ============================================================
+// РЕНДЕР
+// ============================================================
+function render() {
+  // Фон
+  ctx.fillStyle = '#1e1e2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Видимая область
+  const sx = Math.max(0, Math.floor(camera.x / TILE));
+  const ex = Math.min(WORLD_W - 1, Math.ceil((camera.x + canvas.width) / TILE));
+  const sy = Math.max(0, Math.floor(camera.y / TILE));
+  const ey = Math.min(WORLD_H - 1, Math.ceil((camera.y + canvas.height) / TILE));
+
+  // 1) Пол
+  for (let ty = sy; ty <= ey; ty++) {
+    for (let tx = sx; tx <= ex; tx++) {
+      const t = world[ty][tx];
+      const def = TILES[t];
+      if (def.kind !== 'floor') continue;
+
+      const px = tx * TILE - camera.x;
+      const py = ty * TILE - camera.y;
+      ctx.fillStyle = def.color;
+      ctx.fillRect(px, py, TILE, TILE);
+    }
+  }
+
+  // 2) Сетка
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1;
+  for (let ty = sy; ty <= ey; ty++) {
+    for (let tx = sx; tx <= ex; tx++) {
+      const px = tx * TILE - camera.x;
+      const py = ty * TILE - camera.y;
+      ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+    }
+  }
+
+  // 3) Стены / объекты (с псевдо-объёмом)
+  for (let ty = sy; ty <= ey; ty++) {
+    for (let tx = sx; tx <= ex; tx++) {
+      const t = world[ty][tx];
+      const def = TILES[t];
+      if (def.kind !== 'wall') continue;
+
+      const px = tx * TILE - camera.x;
+      const py = ty * TILE - camera.y;
+
+      // Тень
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(px + 3, py + 3, TILE, TILE);
+
+      // Тело
+      ctx.fillStyle = def.color;
+      ctx.fillRect(px, py, TILE, TILE);
+
+      // Блик
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(px, py, TILE, 4);
+
+      // Обводка
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+    }
+  }
+
+  // 4) Подсветка тайла
+  const { tx, ty } = mouseTile();
+  if (inReach(tx, ty) && tx >= 0 && tx < WORLD_W && ty >= 0 && ty < WORLD_H) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tx * TILE - camera.x, ty * TILE - camera.y, TILE, TILE);
+  }
+
+  // 5) Игрок
+  const px = player.x - camera.x;
+  const py = player.y - camera.y;
+
+  // Тень
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 6, player.r + 2, player.r - 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Тело
+  ctx.fillStyle = '#FF6B6B';
+  ctx.beginPath();
+  ctx.arc(px, py, player.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#aa3333';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Направление (глаз)
+  const fx = player.facing.x;
+  const fy = player.facing.y;
+  const eyeX = px + fx * 5;
+  const eyeY = py + fy * 5;
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(eyeX + fx * 1.2, eyeY + fy * 1.2, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Интерфейс
+  renderInventory();
+}
+
+function renderInventory() {
+  const slotSize = 48;
+  const gap = 6;
+  const totalW = INV_SIZE * slotSize + (INV_SIZE - 1) * gap;
+  const startX = (canvas.width - totalW) / 2;
+  const startY = canvas.height - slotSize - 14;
+
+  for (let i = 0; i < INV_SIZE; i++) {
+    const x = startX + i * (slotSize + gap);
+    const y = startY;
+
+    ctx.fillStyle = i === selectedSlot ? 'rgba(255, 215, 0, 0.25)' : 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x, y, slotSize, slotSize);
+
+    ctx.strokeStyle = i === selectedSlot ? '#ffd700' : 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = i === selectedSlot ? 3 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, slotSize - 1, slotSize - 1);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(i === 9 ? '0' : String(i + 1), x + 4, y + 12);
+
+    const slot = inventory[i];
+    if (slot) {
+      ctx.fillStyle = TILES[slot.type].color;
+      ctx.fillRect(x + 8, y + 8, slotSize - 16, slotSize - 16);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.strokeRect(x + 8.5, y + 8.5, slotSize - 17, slotSize - 17);
+
+      if (slot.count > 1) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(String(slot.count), x + slotSize - 5, y + slotSize - 5);
+        ctx.textAlign = 'left';
+      }
+    }
+  }
+
+  const sel = inventory[selectedSlot];
+  if (sel) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(startX, startY - 28, 160, 22);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(TILES[sel.type].name, startX + 8, startY - 12);
+  }
+}
+
+// ============================================================
+// ИГРОВОЙ ЦИКЛ
+// ============================================================
+function update() {
+  updatePlayer();
+  updateInteraction();
+  updateCamera();
+}
+
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ============================================================
+// СТАРТ
+// ============================================================
+generateWorld();
+loop();
+</script>
+</body>
+</html>
