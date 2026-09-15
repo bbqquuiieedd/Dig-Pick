@@ -79,19 +79,19 @@ const RECIPES = [
 
 const TEXTURE_PATHS = {
   items: {
-    0:'textures/tiles/grass.png',1:'textures/tiles/dirt.png',2:'textures/tiles/sand.png',
-    3:'textures/tiles/water.png',4:'textures/tiles/flowers.png',5:'textures/tiles/tallgrass.png',
-    6:'textures/tiles/gravel.png',7:'textures/tiles/stone_floor.png',
-    10:'textures/tiles/stone.png',11:'textures/tiles/iron_ore.png',
-    12:'textures/tiles/tree.png',13:'textures/tiles/leaves.png',14:'textures/tiles/sapling.png',
-    15:'textures/tiles/workbench.png',16:'textures/tiles/furnace.png',17:'textures/tiles/chest.png',
-    20:'textures/items/log.png',21:'textures/items/planks.png',
-    22:'textures/items/stick.png',23:'textures/items/iron_ingot.png',
-    100:'textures/tools/wood_pickaxe.png',101:'textures/tools/wood_axe.png',
-    102:'textures/tools/stone_pickaxe.png',103:'textures/tools/stone_axe.png',
-    104:'textures/tools/iron_pickaxe.png',105:'textures/tools/iron_axe.png',
+    0:'Textures/Tiles/grass.png',1:'Textures/Tiles/dirt.png',2:'Textures/Tiles/sand.png',
+    3:'Textures/Tiles/water.png',4:'Textures/Tiles/flowers.png',5:'Textures/Tiles/tallgrass.png',
+    6:'Textures/Tiles/gravel.png',7:'Textures/Tiles/stone_floor.png',
+    10:'Textures/Tiles/stone.png',11:'Textures/Tiles/iron_ore.png',
+    12:'Textures/Tiles/tree.png',13:'Textures/Tiles/leaves.png',14:'Textures/Tiles/sapling.png',
+    15:'Textures/Tiles/workbench.png',16:'Textures/Tiles/furnace.png',17:'Textures/Tiles/chest.png',
+    20:'Textures/Items/log.png',21:'Textures/Items/planks.png',
+    22:'Textures/Items/stick.png',23:'Textures/Items/iron_ingot.png',
+    100:'Textures/Tools/wood_pickaxe.png',101:'Textures/Tools/wood_axe.png',
+    102:'Textures/Tools/stone_pickaxe.png',103:'Textures/Tools/stone_axe.png',
+    104:'Textures/Tools/iron_pickaxe.png',105:'Textures/Tools/iron_axe.png',
   },
-  player: 'textures/player.png',
+  player: 'Textures/player.png',
 };
 
 const images = {};
