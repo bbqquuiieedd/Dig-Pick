@@ -1,25 +1,106 @@
 <head>
-    <!-- Заголовок -->
     <title>Dig-Pick</title>
-    <!-- Подключение внешнего CSS -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- Игровое полотно -->
     <div id="game-wrapper">
         <canvas id="game"></canvas>
     </div>
 
-    <div id="loading">Загрузка текстур...</div>
+    <!-- Экран загрузки текстур -->
+    <div id="loading">
+        <div class="loading-content">
+            <div class="loading-text">Загрузка текстур...</div>
+            <div class="loading-hint hidden" id="loading-hint">
+                Загрузка занимает слишком много времени.<br>
+                Возможно, произошла ошибка.<br>
+                <span class="loading-hint-small">Проверьте консоль (F12) или перезагрузите страницу.</span>
+            </div>
+        </div>
+    </div>
 
+    <!-- Подсказка по управлению -->
     <div id="help">
         <b>Управление:</b><br>
         WASD / Стрелки - движение<br>
         ЛКМ - копать / рубить<br>
-        ПКМ - поставить блок<br>
+        ПКМ - поставить / открыть<br>
         1-9, 0 - слот<br>
-        Колесо - слот
+        Колесо - слот<br>
+        <b>Tab</b> - инвентарь<br>
+        <b>Esc</b> - пауза
     </div>
 
-    <!-- Подключение внешнего JS -->
-    <script src="js/main.js"></script>
+    <!-- Главное меню -->
+    <div id="menu-main" class="menu hidden">
+        <div class="menu-panel">
+            <h1 class="menu-title">⛏️ Dig-Pick</h1>
+            <p class="menu-subtitle">2D-песочница</p>
+            <div class="menu-buttons">
+                <button id="btn-play" class="menu-btn menu-btn-primary">Играть</button>
+                <button id="btn-settings-main" class="menu-btn">Настройки</button>
+            </div>
+            <p class="menu-footer">bbqquuiieedd</p>
+        </div>
+    </div>
+
+    <!-- Окно выбора слота -->
+    <div id="menu-slots" class="menu hidden">
+        <div class="menu-panel menu-panel-wide">
+            <h1 class="menu-title-small">Выбор сохранения</h1>
+            <div class="slots-list" id="slots-list"></div>
+            <div class="menu-buttons">
+                <button id="btn-slots-back" class="menu-btn">Назад</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Меню паузы -->
+    <div id="menu-pause" class="menu hidden">
+        <div class="menu-panel">
+            <h1 class="menu-title-small">Пауза</h1>
+            <div class="menu-buttons">
+                <button id="btn-resume" class="menu-btn menu-btn-primary">Продолжить</button>
+                <button id="btn-save" class="menu-btn">Сохранение</button>
+                <button id="btn-settings-pause" class="menu-btn">Настройки</button>
+                <button id="btn-to-main" class="menu-btn menu-btn-danger">В главное меню</button>
+            </div>
+            <p class="menu-footer">Esc — вернуться в игру</p>
+        </div>
+    </div>
+
+    <!-- Настройки -->
+    <div id="menu-settings" class="menu hidden">
+        <div class="menu-panel">
+            <h1 class="menu-title-small">Настройки</h1>
+            <p class="menu-info">В разработке...</p>
+            <div class="menu-buttons">
+                <button id="btn-settings-back" class="menu-btn">Назад</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Подтверждение удаления -->
+    <div id="menu-delete" class="menu hidden">
+        <div class="menu-panel">
+            <h1 class="menu-title-small">Удалить сохранение?</h1>
+            <p class="menu-info" id="delete-info">Это действие необратимо.</p>
+            <div class="menu-buttons">
+                <button id="btn-delete-confirm" class="menu-btn menu-btn-danger" disabled>Удалить (5)</button>
+                <button id="btn-delete-cancel" class="menu-btn">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Тост -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Автосохранение -->
+    <div id="autosave-toast" class="autosave-toast hidden">
+        <span class="autosave-toast-dot"></span>
+        <span>Автосохранение</span>
+    </div>
+
+    <script src="js/script.js"></script>
 </body>
