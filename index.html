@@ -1,14 +1,14 @@
+<!DOCTYPE html>
+<html lang="ru">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dig-Pick</title>
-    <link rel="stylesheet" href="CSS/style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Игровое полотно -->
-    <div id="game-wrapper">
-        <canvas id="game"></canvas>
-    </div>
+    <div id="game-wrapper"><canvas id="game"></canvas></div>
 
-    <!-- Экран загрузки текстур -->
     <div id="loading">
         <div class="loading-content">
             <div class="loading-text">Загрузка текстур...</div>
@@ -20,7 +20,6 @@
         </div>
     </div>
 
-    <!-- Подсказка по управлению -->
     <div id="help">
         <b>Управление:</b><br>
         WASD / Стрелки - движение<br>
@@ -32,7 +31,6 @@
         <b>Esc</b> - пауза
     </div>
 
-    <!-- Главное меню -->
     <div id="menu-main" class="menu hidden">
         <div class="menu-panel">
             <h1 class="menu-title">⛏️ Dig-Pick</h1>
@@ -41,11 +39,10 @@
                 <button id="btn-play" class="menu-btn menu-btn-primary">Играть</button>
                 <button id="btn-settings-main" class="menu-btn">Настройки</button>
             </div>
-            <p class="menu-footer">bbqquuiieedd</p>
+            <p class="menu-footer">bbqquuiieedd · v1.4</p>
         </div>
     </div>
 
-    <!-- Окно выбора слота -->
     <div id="menu-slots" class="menu hidden">
         <div class="menu-panel menu-panel-wide">
             <h1 class="menu-title-small">Выбор сохранения</h1>
@@ -56,7 +53,6 @@
         </div>
     </div>
 
-    <!-- Меню паузы -->
     <div id="menu-pause" class="menu hidden">
         <div class="menu-panel">
             <h1 class="menu-title-small">Пауза</h1>
@@ -70,18 +66,66 @@
         </div>
     </div>
 
-    <!-- Настройки -->
+    <!-- НАСТРОЙКИ -->
     <div id="menu-settings" class="menu hidden">
-        <div class="menu-panel">
+        <div class="menu-panel menu-panel-wide">
             <h1 class="menu-title-small">Настройки</h1>
-            <p class="menu-info">В разработке...</p>
+
+            <div class="settings-body">
+                <div class="settings-row">
+                    <label class="settings-label">Автосохранение</label>
+                    <select id="setting-autosave" class="settings-select">
+                        <option value="1">1 минута</option>
+                        <option value="2">2 минуты</option>
+                        <option value="5">5 минут</option>
+                        <option value="10">10 минут</option>
+                        <option value="0">Выключено</option>
+                    </select>
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label">Показывать FPS</label>
+                    <label class="settings-toggle">
+                        <input type="checkbox" id="setting-fps">
+                        <span class="settings-toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="settings-row">
+                    <label class="settings-label">Подсказка управления</label>
+                    <label class="settings-toggle">
+                        <input type="checkbox" id="setting-help">
+                        <span class="settings-toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="settings-section-title">Управление</div>
+                <div id="keybinds-list" class="keybinds-list"></div>
+
+                <div class="settings-actions">
+                    <button id="btn-keybinds-reset-all" class="menu-btn menu-btn-danger">Сбросить управление</button>
+                </div>
+            </div>
+
             <div class="menu-buttons">
                 <button id="btn-settings-back" class="menu-btn">Назад</button>
             </div>
         </div>
     </div>
 
-    <!-- Подтверждение удаления -->
+    <!-- Модалка назначения клавиши -->
+    <div id="keybind-modal" class="menu hidden">
+        <div class="menu-panel">
+            <h1 class="menu-title-small">Назначение клавиши</h1>
+            <p class="menu-info" id="keybind-modal-action">—</p>
+            <p class="menu-info keybind-waiting">Нажмите любую клавишу…</p>
+            <p class="menu-footer">Esc — отмена</p>
+            <div class="menu-buttons">
+                <button id="btn-keybind-cancel" class="menu-btn">Отмена</button>
+            </div>
+        </div>
+    </div>
+
     <div id="menu-delete" class="menu hidden">
         <div class="menu-panel">
             <h1 class="menu-title-small">Удалить сохранение?</h1>
@@ -93,14 +137,39 @@
         </div>
     </div>
 
-    <!-- Тост -->
     <div id="toast" class="toast hidden"></div>
-
-    <!-- Автосохранение -->
     <div id="autosave-toast" class="autosave-toast hidden">
         <span class="autosave-toast-dot"></span>
         <span>Автосохранение</span>
     </div>
 
-    <script src="JS/script.js"></script>
+        <!-- Debug-консоль -->
+    <div id="debug-console" class="debug-console hidden">
+        <div class="debug-output" id="debug-output"></div>
+        <div class="debug-input-wrap">
+            <span class="debug-prefix">></span>
+            <input type="text" id="debug-input" class="debug-input" placeholder="Введите команду… (~ для закрытия)" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <script src="JS/config.js"></script>
+    <script src="JS/state.js"></script>
+    <script src="JS/settings.js"></script>
+    <script src="JS/textures.js"></script>
+    <script src="JS/world.js"></script>
+    <script src="JS/inventory.js"></script>
+    <script src="JS/crafting.js"></script>
+    <script src="JS/chest.js"></script>
+    <script src="JS/furnace.js"></script>
+    <script src="JS/player.js"></script>
+    <script src="JS/save.js"></script>
+    <script src="JS/ui.js"></script>
+    <script src="JS/actions.js"></script>
+    <script src="JS/entities.js"></script>
+    <script src="JS/input.js"></script>
+    <script src="JS/render_world.js"></script>
+    <script src="JS/render_ui.js"></script>
+    <script src="JS/ui_menus.js"></script>
+    <script src="JS/debug.js"></script>
+    <script src="JS/game.js"></script>
 </body>
