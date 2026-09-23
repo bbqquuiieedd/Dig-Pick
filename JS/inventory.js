@@ -5,11 +5,25 @@ function resetInventory(){
   state.selectedHotbarSlot = 0;
 }
 
-function isStackable(id){ const it = ITEMS[id]; return !(it && it.kind === 'tool'); }
+function isStackable(id){
+  const it = ITEMS[id];
+  if(!it) return false;
+  if(it.kind === 'tool') return false;
+  if(typeof it.maxDurability === 'number') return false;
+  return true;
+}
 
 function tryStack(arr, type, count){
   if(!isStackable(type)) return false;
-  for(const s of arr) if(s && s.type === type && s.count < 99){ s.count += count; return true; }
+  for(const s of arr){
+    if(s && s.type === type && s.count < 99){
+      const free = 99 - s.count;
+      const add = Math.min(free, count);
+      s.count += add;
+      count -= add;
+      if(count <= 0) return true;
+    }
+  }
   return false;
 }
 
@@ -30,15 +44,25 @@ function makeItemStack(type, count, durability){
   return item;
 }
 
+// Возвращает true, если удалось положить всё.
 function addToInventory(type, count = 1, durability = undefined){
-  // Стек для обычных
-  if(isStackable(type) && tryStack(state.hotbar, type, count)) return true;
-  if(isStackable(type) && tryStack(state.inventory, type, count)) return true;
-  // Пустой слот
-  const item = makeItemStack(type, count, durability);
-  if(tryEmpty(state.hotbar, item)) return true;
-  if(tryEmpty(state.inventory, item)) return true;
-  return false;
+  // 1) Стакаем в существующие стеки
+  if(isStackable(type)){
+    if(tryStack(state.hotbar, type, count)) return true;
+    if(tryStack(state.inventory, type, count)) return true;
+  }
+
+  // 2) Оставшееся — в пустые слоты
+  const def = ITEMS[type];
+  const isTool = def && def.kind === 'tool';
+  while(count > 0){
+    const chunk = isTool ? 1 : Math.min(99, count);
+    const item = makeItemStack(type, chunk, durability);
+    if(tryEmpty(state.hotbar, item)) { count -= chunk; continue; }
+    if(tryEmpty(state.inventory, item)) { count -= chunk; continue; }
+    return false;
+  }
+  return true;
 }
 
 function getSelectedTool(){
@@ -49,7 +73,6 @@ function getSelectedTool(){
   return null;
 }
 
-// Уменьшает прочность инструмента в руке; при 0 — ломает
 function damageTool(){
   const slot = state.hotbar[state.selectedHotbarSlot];
   if(!slot) return;

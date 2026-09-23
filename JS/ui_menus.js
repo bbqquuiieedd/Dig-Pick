@@ -1,5 +1,5 @@
 // ============================================================
-// ui_menus.js — HTML-меню: старт, пауза, слоты, настройки, кейбинды
+// ui_menus.js — HTML-меню, настройки, торговля
 // ============================================================
 
 const $ = id => document.getElementById(id);
@@ -10,6 +10,7 @@ const menuPause    = $('menu-pause');
 const menuSettings = $('menu-settings');
 const menuDelete   = $('menu-delete');
 const menuKeybind  = $('keybind-modal');
+const menuSeed     = $('menu-seed');
 
 const btnPlay           = $('btn-play');
 const btnSettingsMain   = $('btn-settings-main');
@@ -26,6 +27,7 @@ const slotsList    = $('slots-list');
 const deleteInfo   = $('delete-info');
 const helpEl       = $('help');
 
+const settingTheme        = $('setting-theme');
 const settingAutosave     = $('setting-autosave');
 const settingFps          = $('setting-fps');
 const settingHelp         = $('setting-help');
@@ -48,28 +50,37 @@ function setHelpVisible(v){
   if(helpEl) helpEl.style.display = (v && settings.showHelp) ? '' : 'none';
 }
 
+function enterMainMenu(){
+  document.body.classList.add('menu-open');
+  document.body.classList.remove('game-active');
+}
+function enterGame(){
+  document.body.classList.add('game-active');
+  document.body.classList.remove('menu-open');
+}
+
 function showMainMenu(){
   state.gameState = 'menu';
   state.currentSlot = null;
   stopAutosave();
   setHelpVisible(false);
   showMenuOnly(menuMain);
+  enterMainMenu();
 }
 
 // ============================================================
 // ИНИЦИАЛИЗАЦИЯ
 // ============================================================
 function initMenus(){
+  setTheme(settings.theme || 'light');
+  enterMainMenu();
   renderSlotsList();
 
-  // Главное меню
   btnPlay.addEventListener('click', showSlotsMenu);
   btnSettingsMain.addEventListener('click', () => openSettings('main'));
 
-  // Слоты
   btnSlotsBack.addEventListener('click', showMainMenu);
 
-  // Пауза
   btnResume.addEventListener('click', resumeGame);
   btnSave.addEventListener('click', () => {
     if(state.currentSlot === null) return;
@@ -86,7 +97,6 @@ function initMenus(){
   });
   btnSettingsBack.addEventListener('click', closeSettings);
 
-  // Удаление сохранения
   btnDeleteConfirm.addEventListener('click', () => {
     if(state.deleteTarget === null || btnDeleteConfirm.disabled) return;
     deleteSave(state.deleteTarget);
@@ -97,7 +107,13 @@ function initMenus(){
   });
   btnDeleteCancel.addEventListener('click', closeDeleteConfirm);
 
-  // Настройки
+  if(settingTheme){
+    settingTheme.addEventListener('change', () => {
+      settings.theme = settingTheme.value;
+      saveSettings();
+      setTheme(settings.theme);
+    });
+  }
   settingAutosave.addEventListener('change', () => {
     settings.autosaveMinutes = parseInt(settingAutosave.value, 10) || 0;
     saveSettings();
@@ -120,7 +136,6 @@ function initMenus(){
   });
   btnKeybindCancel.addEventListener('click', cancelKeybind);
 
-  // События от input.js
   document.addEventListener('pauseGame', pauseGame);
   document.addEventListener('resumeGame', resumeGame);
   document.addEventListener('closeSettings', closeSettings);
@@ -132,7 +147,6 @@ function initMenus(){
     showMenuOnly(menuSettings);
   });
 
-  // beforeunload
   window.addEventListener('beforeunload', e => {
     if(state.gameState === 'playing' || state.gameState === 'paused' || state.gameState === 'paused-ui'){
       e.preventDefault();
@@ -145,18 +159,16 @@ function initMenus(){
 // ============================================================
 // ЗАПУСК ИГРЫ
 // ============================================================
-function playSlot(s){
-  state.currentSlot = s;
-  if(hasSave(s)){
-    if(!loadGame(s)){ showToast('Не удалось загрузить сохранение'); return; }
+function playSlot(slot, seed){
+  state.currentSlot = slot;
+  if(hasSave(slot)){
+    if(!loadGame(slot)){ showToast('Не удалось загрузить сохранение'); return; }
   } else {
-    generateWorld();
+    generateWorld(seed);
     resetPlayer();
     resetInventory();
   }
-  // Пересоздать сущностей (для нового мира или загрузки)
-  spawnAnimals();
-  spawnRaccoon();
+  spawnAllEntities();
   state.savedSinceLastResume = false;
   clearInput();
   updateCamera();
@@ -164,6 +176,7 @@ function playSlot(s){
   setHelpVisible(true);
   state.gameState = 'playing';
   startAutosave();
+  enterGame();
 }
 
 // ============================================================
@@ -205,21 +218,25 @@ function renderSlotsList(){
 
     if(saved){
       const pb = document.createElement('button');
-      pb.className = 'menu-btn menu-btn-primary';
+      pb.className = 'menu-btn-mini menu-btn-mini-primary';
       pb.textContent = 'Играть';
       pb.addEventListener('click', () => playSlot(s));
       actions.appendChild(pb);
 
       const db = document.createElement('button');
-      db.className = 'menu-btn menu-btn-danger';
+      db.className = 'menu-btn-mini menu-btn-mini-danger';
       db.textContent = 'Удалить';
       db.addEventListener('click', () => openDeleteConfirm(s));
       actions.appendChild(db);
     } else {
       const nb = document.createElement('button');
-      nb.className = 'menu-btn menu-btn-primary';
+      nb.className = 'menu-btn-mini menu-btn-mini-primary';
       nb.textContent = 'Создать';
-      nb.addEventListener('click', () => playSlot(s));
+      nb.addEventListener('click', () => {
+        const seed = prompt('Введите сид мира (пусто = случайный):', '');
+        const parsed = seed && seed.trim() !== '' ? (isNaN(seed) ? hashString(seed) : parseInt(seed, 10)) : Math.floor(Math.random() * 1e9);
+        playSlot(s, parsed);
+      });
       actions.appendChild(nb);
     }
 
@@ -228,8 +245,17 @@ function renderSlotsList(){
   }
 }
 
+// Хэш строки в число (для текстовых сидов)
+function hashString(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){
+    h = (h * 31 + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 // ============================================================
-// ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ
+// УДАЛЕНИЕ СЛОТА
 // ============================================================
 function openDeleteConfirm(s){
   state.deleteTarget = s;
@@ -302,10 +328,11 @@ function openSettings(from){
 }
 function closeSettings(){
   if(state.settingsBackTo === 'pause' && state.gameState === 'paused') showMenuOnly(menuPause);
-  else showMenuOnly(menuMain);
+  else showMainMenu();
 }
 
 function renderSettingsUI(){
+  if(settingTheme) settingTheme.value = settings.theme || 'light';
   settingAutosave.value = String(settings.autosaveMinutes);
   settingFps.checked = !!settings.showFps;
   settingHelp.checked = !!settings.showHelp;

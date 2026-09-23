@@ -5,6 +5,7 @@ function loadSettings(){
     if(!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     const p = JSON.parse(raw);
     return {
+      theme: p.theme === 'dark' ? 'dark' : 'light',
       autosaveMinutes: typeof p.autosaveMinutes === 'number' ? p.autosaveMinutes : DEFAULT_SETTINGS.autosaveMinutes,
       showFps:  typeof p.showFps  === 'boolean' ? p.showFps  : DEFAULT_SETTINGS.showFps,
       showHelp: typeof p.showHelp === 'boolean' ? p.showHelp : DEFAULT_SETTINGS.showHelp,
@@ -14,6 +15,8 @@ function loadSettings(){
 }
 
 let settings = loadSettings();
+// Применяем тему сразу
+setTheme(settings.theme);
 
 function saveSettings(){
   try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
