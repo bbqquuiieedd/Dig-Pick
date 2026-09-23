@@ -73,6 +73,33 @@ function drawFire(px, py){
 function drawObject(id, tx, ty){
   const px = tx*TILE - state.camera.x;
   const py = ty*TILE - state.camera.y;
+
+  // Двери и калитки — особый случай (открыта/закрыта)
+  if(id === O_DOOR || id === O_GATE){
+    const key = `${tx},${ty}`;
+    const open = state.openDoors && state.openDoors[key];
+
+    if(open){
+      // Открытая — рисуем «распахнутую» половинку
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fillRect(px + 3, py + 3, TILE, TILE);
+
+      const img = getItemImage(id);
+      if(img){
+        // Только левая половинка (половина ширины)
+        ctx.drawImage(img, 0, 0, img.width/2, img.height,
+                      px - TILE*0.4, py, TILE/2, TILE);
+      } else {
+        ctx.fillStyle = '#8a5025';
+        ctx.fillRect(px - TILE*0.4, py, TILE/2, TILE);
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.strokeRect(px - TILE*0.4 + 0.5, py + 0.5, TILE/2 - 1, TILE - 1);
+      }
+      return;
+    }
+    // Закрытая — как обычно, падает вниз
+  }
+
   const img = getItemImage(id);
   if(img){
     ctx.fillStyle = 'rgba(0,0,0,0.28)';

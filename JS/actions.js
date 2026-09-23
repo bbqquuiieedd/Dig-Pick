@@ -452,11 +452,19 @@ function tryInteract(){
   if(state.uiMode || state.showRecipes) return false;
   if(state.attackCooldown > 0) return false;
 
+  // ⚡ ФИКС: не перехватываем клик по блоку в мире
+  const { tx, ty } = mouseTile();
+  if(inBounds(tx, ty) && inReach(tx, ty)){
+    if(state.objects[ty][tx] !== null) return false;
+    if(state.floors[ty][tx] === F_BEDROCK) return false;
+    if(state.floors[ty][tx] === F_GRAVEL) return false;
+  }
+
   const slot = state.hotbar[state.selectedHotbarSlot];
   const item = slot ? ITEMS[slot.type] : null;
 
   const px = state.player.x, py = state.player.y;
-  const range = 1.7 * TILE;
+  const range = 2.5 * TILE;
   const rangeSq = range * range;
 
   let target = null, best = rangeSq, targetType = null;

@@ -1,13 +1,8 @@
-// ============================================================
-// world.js — генерация мира 200×100, остров, структуры, сиды
-// ============================================================
+// world.js — генерация мира 200×100
 
 function inBounds(tx,ty){ return tx>=0 && tx<WORLD_W && ty>=0 && ty<WORLD_H; }
 function isFloorWater(tx,ty){ return state.floors[ty][tx] === F_WATER; }
 
-// ============================================================
-// RNG
-// ============================================================
 function makeSeededRng(seed){
   let s = (seed >>> 0) || 1;
   return function(){
@@ -16,9 +11,6 @@ function makeSeededRng(seed){
   };
 }
 
-// ============================================================
-// SOLID
-// ============================================================
 function isSolid(tx, ty){
   if(tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return true;
   return state.solidGrid[ty][tx];
@@ -45,6 +37,14 @@ function rebuildSolidGrid(){
       }
     }
   }
+  // Учитываем открытые двери/калитки
+  if(state.openDoors){
+    for(const k in state.openDoors){
+      if(!state.openDoors[k]) continue;
+      const [x, y] = k.split(',').map(Number);
+      if(inBounds(x, y)) state.solidGrid[y][x] = false;
+    }
+  }
 }
 
 function cleanWaterObjects(){
@@ -55,9 +55,7 @@ function cleanWaterObjects(){
   }
 }
 
-// ============================================================
-// ФОРМА ОСТРОВА
-// ============================================================
+// ---------- Остров ----------
 const ISLAND_MARGIN = 4;
 
 function islandShape(tx, ty){
@@ -75,9 +73,7 @@ function islandShape(tx, ty){
   return d + noise;
 }
 
-// ============================================================
-// ХЕЛПЕРЫ
-// ============================================================
+// ---------- Утилиты ----------
 function paintFloorCircle(cx, cy, r, type, allowed, rng){
   for(let y=cy-r;y<=cy+r;y++) for(let x=cx-r;x<=cx+r;x++){
     if(!inBounds(x,y)) continue;
@@ -127,34 +123,25 @@ function updateSaplings(){
   const now = Date.now();
   for(const k in state.saplings){
     const planted = state.saplings[k];
-    // Проверяем, полита ли грядка (тогда 30 сек)
     const watered = state.wateredFarmland && state.wateredFarmland[k];
     const growTime = watered ? 30000 : 60000;
 
     if(now - planted >= growTime){
       const [x, y] = k.split(',').map(Number);
-      if(!inBounds(x, y)){
-        delete state.saplings[k];
-        continue;
-      }
-      // Если это росток дерева
+      if(!inBounds(x, y)){ delete state.saplings[k]; continue; }
       if(state.objects[y][x] === O_SAPLING){
         growSapling(x, y);
         delete state.saplings[k];
       }
-      // Если картофель — просто остаётся, растение становится "созревшим" по времени
     }
   }
 }
 
-// ============================================================
-// СТРУКТУРЫ
-// ============================================================
+// ---------- Структуры ----------
 function canPlaceAt(tx, ty){
   if(!inBounds(tx, ty)) return false;
   if(state.floors[ty][tx] !== F_GRASS) return false;
   if(state.objects[ty][tx] !== null) return false;
-  // Отступ от воды
   for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
     const nx = tx+dx, ny = ty+dy;
     if(!inBounds(nx, ny)) return false;
@@ -226,11 +213,11 @@ function placeStructure(kind, tx, ty, rng, rngInt){
       state.objects[yy][tx] = O_WALL;
       state.objects[yy][tx + 5] = O_WALL;
     }
-    // Дверь
+    // Дверь — игрок МОЖЕТ открыть
     state.objects[ty + 5][tx + 2] = O_DOOR;
-    state.lockedBlocks[`${tx+2},${ty+5}`] = true;
+    // ❌ НЕ добавляем в lockedBlocks
 
-    // Мебель
+    // Мебель — заперта
     state.objects[ty + 1][tx + 1] = O_TABLE;
     state.objects[ty + 1][tx + 3] = O_BED;
     state.objects[ty + 1][tx + 4] = O_CHEST;
@@ -252,9 +239,7 @@ function placeStructure(kind, tx, ty, rng, rngInt){
   return false;
 }
 
-// ============================================================
-// ГЛАВНАЯ ГЕНЕРАЦИЯ
-// ============================================================
+// ---------- Генерация ----------
 function generateWorld(seed){
   if(typeof seed !== 'number' || !isFinite(seed)){
     seed = Math.floor(Math.random() * 1e9);
@@ -263,7 +248,6 @@ function generateWorld(seed){
   const rng = makeSeededRng(seed);
   const rngInt = (a, b) => a + Math.floor(rng() * (b - a + 1));
 
-  // Пустой мир
   for(let y=0;y<WORLD_H;y++){
     state.floors[y] = [];
     state.objects[y] = [];
@@ -285,7 +269,6 @@ function generateWorld(seed){
   state.openDoors = {};
   state.cakeBites = {};
 
-  // Форма острова
   for(let y=0;y<WORLD_H;y++){
     for(let x=0;x<WORLD_W;x++){
       const edgeDist = Math.min(x, y, WORLD_W - 1 - x, WORLD_H - 1 - y);
@@ -300,19 +283,16 @@ function generateWorld(seed){
     }
   }
 
-  // Пятна земли
   for(let i=0;i<80;i++){
     const cx = rngInt(6, WORLD_W-7), cy = rngInt(6, WORLD_H-7);
     if(state.floors[cy][cx] !== F_GRASS) continue;
     paintFloorCircle(cx, cy, rngInt(2, 5), F_DIRT, [F_GRASS], rng);
   }
-  // Гравий
   for(let i=0;i<40;i++){
     const cx = rngInt(6, WORLD_W-7), cy = rngInt(6, WORLD_H-7);
     if(state.floors[cy][cx] !== F_GRASS) continue;
     paintFloorCircle(cx, cy, rngInt(1, 3), F_GRAVEL, [F_GRASS, F_DIRT], rng);
   }
-  // Цветы и трава
   for(let i=0;i<80;i++){
     const cx = rngInt(6, WORLD_W-7), cy = rngInt(6, WORLD_H-7);
     if(state.floors[cy][cx] !== F_GRASS) continue;
@@ -320,7 +300,6 @@ function generateWorld(seed){
     paintFloorCircle(cx, cy, rngInt(1, 3), type, [F_GRASS], rng);
   }
 
-  // Озёра
   for(let i=0;i<10;i++){
     const cx = rngInt(20, WORLD_W-20), cy = rngInt(20, WORLD_H-20);
     if(state.floors[cy][cx] !== F_GRASS) continue;
@@ -329,14 +308,12 @@ function generateWorld(seed){
     paintFloorCircle(cx, cy, r, F_WATER, [F_SAND, F_GRASS, F_DIRT, F_FLOWERS, F_TALLGRASS], rng);
   }
 
-  // Деревья
   for(let i=0;i<140;i++){
     const tx = rngInt(6, WORLD_W-7), ty = rngInt(8, WORLD_H-9);
     if(state.floors[ty][tx] !== F_GRASS) continue;
     plantTree(tx, ty, rng);
   }
 
-  // Камень
   for(let i=0;i<25;i++){
     const cx = rngInt(10, WORLD_W-10), cy = rngInt(10, WORLD_H-10);
     if(state.floors[cy][cx] !== F_GRASS) continue;
@@ -351,7 +328,6 @@ function generateWorld(seed){
     }
   }
 
-  // Bedrock
   for(let i=0;i<50;i++){
     const cx = rngInt(10, WORLD_W-10), cy = rngInt(10, WORLD_H-10);
     if(state.floors[cy][cx] !== F_GRASS && state.floors[cy][cx] !== F_DIRT) continue;
@@ -364,7 +340,6 @@ function generateWorld(seed){
     }
   }
 
-  // Железо
   for(let v=0; v<15; v++){
     const cx = rngInt(10, WORLD_W-10), cy = rngInt(10, WORLD_H-10);
     for(let i=0;i<5;i++){
@@ -375,7 +350,7 @@ function generateWorld(seed){
     }
   }
 
-  // Структуры — 10 штук, из них 1 дом
+  // Дом — первым
   const structureTypes = ['chest', 'table', 'furnace', 'campfire'];
   let placed = 0, attempts = 0;
   while(placed < 1 && attempts < 300){

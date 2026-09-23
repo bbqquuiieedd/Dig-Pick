@@ -1,7 +1,7 @@
-// entities.js — животные, енот, собаки, мобы, жители, floorItems
+// entities.js — животные, енот, собаки, мобы, жители, floorItems, атака
 
 // ============================================================
-// ОБЩЕЕ
+// ХЕЛПЕРЫ
 // ============================================================
 function isAreaFree(x, y, r){
   const minTX = Math.floor((x - r) / TILE);
@@ -56,49 +56,9 @@ function spawnAnimals(){
       dirTimer: Math.random() * 2,
       speed: def.speed,
       hp: def.maxHp, maxHp: def.maxHp,
-      hurtTimer: 0,
-      shearTimer: 0,
-      milkTimer: 0,
-      eggTimer: 0,
+      hurtTimer: 0, shearTimer: 0, milkTimer: 0, eggTimer: 0,
       sheared: false,
     });
-  }
-}
-
-function updateAnimals(dt){
-  // Ограничение минимума
-  const minNeeded = ANIMALS_MIN - state.animals.length;
-  if(minNeeded > 0 && Math.random() < 0.02){
-    spawnOneAnimal();
-  }
-
-  for(const a of state.animals){
-    if(a.hurtTimer > 0) a.hurtTimer -= dt;
-    if(a.shearTimer > 0) a.shearTimer -= dt;
-    if(a.milkTimer > 0) a.milkTimer -= dt;
-    if(a.eggTimer > 0) a.eggTimer -= dt;
-
-    // Шерсть отрастает
-    if(a.sheared && a.shearTimer <= 0) a.sheared = false;
-
-    a.dirTimer -= dt;
-    if(a.dirTimer <= 0){
-      a.dirTimer = 1.5 + Math.random() * 3;
-      if(Math.random() < 0.45){ a.dirX = 0; a.dirY = 0; }
-      else {
-        const ang = Math.random() * Math.PI * 2;
-        a.dirX = Math.cos(ang);
-        a.dirY = Math.sin(ang);
-      }
-    }
-    if(a.dirX === 0 && a.dirY === 0) continue;
-
-    const def = ANIMAL_DEFS[a.type];
-    const r = def.size + 2;
-    const dx = a.dirX * a.speed * dt * 60;
-    const dy = a.dirY * a.speed * dt * 60;
-    if(isAreaFree(a.x + dx, a.y, r)) a.x += dx; else a.dirTimer = 0;
-    if(isAreaFree(a.x, a.y + dy, r)) a.y += dy; else a.dirTimer = 0;
   }
 }
 
@@ -127,28 +87,65 @@ function spawnOneAnimal(){
   }
 }
 
+function updateAnimals(dt){
+  // Ограничение минимума
+  if(state.animals.length < ANIMALS_MIN && Math.random() < 0.02){
+    spawnOneAnimal();
+  }
+
+  for(const a of state.animals){
+    if(a.hurtTimer > 0) a.hurtTimer -= dt;
+    if(a.shearTimer > 0) a.shearTimer -= dt;
+    if(a.milkTimer > 0) a.milkTimer -= dt;
+    if(a.eggTimer > 0) a.eggTimer -= dt;
+
+    if(a.sheared && a.shearTimer <= 0) a.sheared = false;
+
+    a.dirTimer -= dt;
+    if(a.dirTimer <= 0){
+      a.dirTimer = 1.5 + Math.random() * 3;
+      if(Math.random() < 0.45){ a.dirX = 0; a.dirY = 0; }
+      else {
+        const ang = Math.random() * Math.PI * 2;
+        a.dirX = Math.cos(ang);
+        a.dirY = Math.sin(ang);
+      }
+    }
+    if(a.dirX === 0 && a.dirY === 0) continue;
+
+    const def = ANIMAL_DEFS[a.type];
+    const r = def.size + 2;
+    const dx = a.dirX * a.speed * dt * 60;
+    const dy = a.dirY * a.speed * dt * 60;
+    if(isAreaFree(a.x + dx, a.y, r)) a.x += dx; else a.dirTimer = 0;
+    if(isAreaFree(a.x, a.y + dy, r)) a.y += dy; else a.dirTimer = 0;
+  }
+}
+
 // ============================================================
 // СОБАКИ
 // ============================================================
 const DOG_MAX_HP = 5;
-const DOG_COOLDOWN = 5 * 60 * 1000;
 
 function spawnDog(x, y, owner){
   state.dogs.push({
     name: 'Собака',
     x, y,
-    owner: owner || 'wild',   // 'wild' | 'player' | 'villager'
+    owner: owner || 'wild',
     hp: DOG_MAX_HP, maxHp: DOG_MAX_HP,
     dirX: 0, dirY: 0,
     dirTimer: 0,
     hurtTimer: 0,
+    isWolf: false,
+    tameProgress: 0,
     target: null,
   });
 }
 
 function updateDogs(dt){
-  // Спавн диких собак днём
-  if(isDay() && state.dogs.filter(d => d.owner === 'wild').length < 3 && Math.random() < 0.005){
+  // Спавн диких собак днём (если их меньше 3)
+  const wildCount = state.dogs.filter(d => d.owner === 'wild').length;
+  if(isDay() && wildCount < 3 && Math.random() < 0.005){
     for(let tries = 0; tries < 20; tries++){
       const tx = randInt(8, WORLD_W-8), ty = randInt(8, WORLD_H-8);
       if(state.floors[ty][tx] !== F_GRASS) continue;
@@ -158,15 +155,10 @@ function updateDogs(dt){
       break;
     }
   }
-  // Ночью дикие собаки становятся волками — конвертируем
-  if(isNight()){
-    for(const d of state.dogs){
-      if(d.owner === 'wild') d.isWolf = true;
-    }
-  } else {
-    for(const d of state.dogs){
-      if(d.owner === 'wild') d.isWolf = false;
-    }
+
+  // Ночь — дикие собаки = волки
+  for(const d of state.dogs){
+    if(d.owner === 'wild') d.isWolf = isNight();
   }
 
   const p = state.player;
@@ -174,7 +166,6 @@ function updateDogs(dt){
     if(d.hurtTimer > 0) d.hurtTimer -= dt;
 
     if(d.owner === 'player'){
-      // Ходит за игроком
       const dx = p.x - d.x, dy = p.y - d.y;
       const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
       if(dist > 2.5 * TILE){
@@ -184,8 +175,8 @@ function updateDogs(dt){
         if(isAreaFree(nx, d.y, 12)) d.x = nx;
         if(isAreaFree(d.x, ny, 12)) d.y = ny;
       }
-    } else if(d.owner === 'villager'){
-      // Идёт за жителем
+    }
+    else if(d.owner === 'villager'){
       const v = state.villagers[0];
       if(v){
         const dx = v.x - d.x, dy = v.y - d.y;
@@ -198,7 +189,8 @@ function updateDogs(dt){
           if(isAreaFree(d.x, ny, 12)) d.y = ny;
         }
       }
-    } else {
+    }
+    else {
       // Дикая собака / волк — бродит
       d.dirTimer -= dt;
       if(d.dirTimer <= 0){
@@ -364,19 +356,16 @@ function updateRaccoon(dt){
 }
 
 // ============================================================
-// НОЧНЫЕ МОБЫ (простые «волки»)
+// НОЧНЫЕ МОБЫ
 // ============================================================
 const MOB_MAX_HP = 3;
 const MOB_MAX_COUNT = 5;
 
 function updateMobs(dt){
   if(isDay()){
-    // Утром мобы исчезают
     if(state.mobs.length > 0) state.mobs = [];
     return;
   }
-
-  // Ночью спавнятся до 5
   if(state.mobs.length < MOB_MAX_COUNT && Math.random() < 0.005){
     for(let tries = 0; tries < 30; tries++){
       const tx = randInt(8, WORLD_W-8), ty = randInt(8, WORLD_H-8);
@@ -385,7 +374,7 @@ function updateMobs(dt){
       const px = tx*TILE+TILE/2, py = ty*TILE+TILE/2;
       const pdx = px - state.player.x, pdy = py - state.player.y;
       const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
-      if(pdist < 6 * TILE) continue; // не спавним рядом
+      if(pdist < 6 * TILE) continue;
       if(!isAreaFree(px, py, 12)) continue;
       state.mobs.push({
         name: 'Тень',
@@ -414,7 +403,6 @@ function updateMobs(dt){
       if(isAreaFree(nx, m.y, 12)) m.x = nx;
       if(isAreaFree(m.x, ny, 12)) m.y = ny;
 
-      // Укус
       if(dist < 1.0 * TILE && m.attackCooldown <= 0){
         state.player.hp -= 1;
         m.attackCooldown = 1.5;
@@ -425,7 +413,7 @@ function updateMobs(dt){
 }
 
 // ============================================================
-// ЖИТЕЛИ
+// ЖИТЕЛИ + СОБАКА ЖИТЕЛЯ
 // ============================================================
 function spawnVillager(){
   if(!state.villagerSpawn) return;
@@ -439,9 +427,12 @@ function spawnVillager(){
     dirX: 0, dirY: 0,
     hp: 9999,
   }];
-  // Собака жителя
-  if(state.villagerDogSpawn){
-    spawnDog(state.villagerDogSpawn.x * TILE + TILE/2, state.villagerDogSpawn.y * TILE + TILE/2, 'villager');
+  // Собака жителя — только если её нет среди dogs с owner === 'villager'
+  const alreadyHasVillagerDog = state.dogs.some(d => d.owner === 'villager');
+  if(!alreadyHasVillagerDog && state.villagerDogSpawn){
+    spawnDog(state.villagerDogSpawn.x * TILE + TILE/2,
+             state.villagerDogSpawn.y * TILE + TILE/2,
+             'villager');
   }
 }
 
@@ -450,10 +441,7 @@ function updateVillagers(dt){
     v.dirTimer -= dt;
     if(v.dirTimer <= 0){
       v.dirTimer = 2 + Math.random() * 3;
-      if(isNight()){
-        // Ночью стоит дома
-        v.dirX = 0; v.dirY = 0;
-      } else if(Math.random() < 0.5){
+      if(isNight() || Math.random() < 0.5){
         v.dirX = 0; v.dirY = 0;
       } else {
         const ang = Math.random() * Math.PI * 2;
@@ -475,7 +463,7 @@ function updateVillagers(dt){
 }
 
 // ============================================================
-// ПРЕДМЕТЫ НА ПОЛУ
+// FLOOR ITEMS
 // ============================================================
 function spawnFloorItem(x, y, item){
   state.floorItems.push({
@@ -485,7 +473,7 @@ function spawnFloorItem(x, y, item){
     durability: item.durability,
     spawnAt: Date.now(),
     vy: -1.5,
-    lifeTime: 5 * 60 * 1000, // 5 минут
+    lifeTime: 5 * 60 * 1000,
   });
 }
 
@@ -496,7 +484,6 @@ function updateFloorItems(dt){
 
   for(let i = state.floorItems.length - 1; i >= 0; i--){
     const it = state.floorItems[i];
-    // Подбор
     const dx = p.x - it.x, dy = p.y - it.y;
     if(dx*dx + dy*dy < pickR * pickR && now - it.spawnAt > 1000){
       if(addToInventory(it.type, it.count, it.durability)){
@@ -504,29 +491,7 @@ function updateFloorItems(dt){
         continue;
       }
     }
-    // Исчезновение
     if(now - it.spawnAt > it.lifeTime) state.floorItems.splice(i, 1);
-  }
-}
-
-// ============================================================
-// ОГОНЬ
-// ============================================================
-function updateFire(dt){
-  // Простая реализация: огонь на floors[F_FIRE] гаснет через 10 сек
-  const now = performance.now();
-  for(let y=0;y<WORLD_H;y++){
-    for(let x=0;x<WORLD_W;x++){
-      if(state.floors[y][x] === F_FIRE){
-        const key = `${x},${y}`;
-        state._fireTimers = state._fireTimers || {};
-        if(!state._fireTimers[key]) state._fireTimers[key] = now + FIRE_LIFE_MS;
-        if(now > state._fireTimers[key]){
-          state.floors[y][x] = F_GRASS;
-          delete state._fireTimers[key];
-        }
-      }
-    }
   }
 }
 
@@ -551,18 +516,15 @@ function tryAttack(){
     }
   }
 
-  // Направление удара в сторону курсора
   const dx = state.mouse.x + state.camera.x - state.player.x;
   const dy = state.mouse.y + state.camera.y - state.player.y;
   const len = Math.sqrt(dx*dx + dy*dy) || 1;
   state.attackAnimDirX = dx / len;
   state.attackAnimDirY = dy / len;
 
-  // Анимация всегда
   state.attackAnim = 0.2;
   state.attackCooldown = cooldown;
 
-  // Ищем цель в радиусе 1.7 тайла
   const px = state.player.x, py = state.player.y;
   const range = 1.7 * TILE;
   const rangeSq = range * range;
@@ -593,21 +555,16 @@ function tryAttack(){
 
   if(!closest) return;
 
-  // Урон
   closest.hp -= damage;
   closest.hurtTimer = 0.25;
-
-  // Тратим прочность инструмента только если попали и это не рука
   if(toolDef && typeof damageTool === 'function') damageTool();
 
-  // Смерть
   if(closest.hp <= 0){
     if(closest === state.raccoon){
       state.raccoonCooldown = Date.now() + RACCOON_COOLDOWN_MS;
       state.raccoon = null;
       if(typeof showToast === 'function') showToast('🦝 Енот сбежал на 5 минут');
     } else if(state.animals.includes(closest)){
-      // Животное — дропаем мясо
       const idx = state.animals.indexOf(closest);
       if(idx >= 0) state.animals.splice(idx, 1);
       spawnFloorItem(closest.x, closest.y, { type: I_MEAT, count: 1 + randInt(0, 2) });
@@ -624,11 +581,14 @@ function tryAttack(){
   }
 }
 
-// Пересобираем сущности с новыми функциями
+// ============================================================
+// СТАРТ
+// ============================================================
 function spawnAllEntities(){
   spawnAnimals();
   spawnRaccoon();
   if(state.villagerSpawn) spawnVillager();
+
   for(let i=0;i<2;i++){
     for(let tries = 0; tries < 20; tries++){
       const tx = randInt(8, WORLD_W-8), ty = randInt(8, WORLD_H-8);

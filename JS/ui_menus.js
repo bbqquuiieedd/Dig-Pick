@@ -1,6 +1,4 @@
-// ============================================================
-// ui_menus.js — HTML-меню, настройки, торговля
-// ============================================================
+// ui_menus.js — HTML-меню, настройки
 
 const $ = id => document.getElementById(id);
 
@@ -10,7 +8,6 @@ const menuPause    = $('menu-pause');
 const menuSettings = $('menu-settings');
 const menuDelete   = $('menu-delete');
 const menuKeybind  = $('keybind-modal');
-const menuSeed     = $('menu-seed');
 
 const btnPlay           = $('btn-play');
 const btnSettingsMain   = $('btn-settings-main');
@@ -36,9 +33,6 @@ const btnKeybindsResetAll = $('btn-keybinds-reset-all');
 const keybindModalAction  = $('keybind-modal-action');
 const btnKeybindCancel    = $('btn-keybind-cancel');
 
-// ============================================================
-// ХЕЛПЕРЫ
-// ============================================================
 function hideAllMenus(){
   document.querySelectorAll('.menu').forEach(m => m.classList.add('hidden'));
 }
@@ -68,9 +62,6 @@ function showMainMenu(){
   enterMainMenu();
 }
 
-// ============================================================
-// ИНИЦИАЛИЗАЦИЯ
-// ============================================================
 function initMenus(){
   setTheme(settings.theme || 'light');
   enterMainMenu();
@@ -78,9 +69,7 @@ function initMenus(){
 
   btnPlay.addEventListener('click', showSlotsMenu);
   btnSettingsMain.addEventListener('click', () => openSettings('main'));
-
   btnSlotsBack.addEventListener('click', showMainMenu);
-
   btnResume.addEventListener('click', resumeGame);
   btnSave.addEventListener('click', () => {
     if(state.currentSlot === null) return;
@@ -157,18 +146,25 @@ function initMenus(){
 }
 
 // ============================================================
-// ЗАПУСК ИГРЫ
+// PLAYSLOT — фикс: spawnAllEntities ТОЛЬКО для новой игры
 // ============================================================
 function playSlot(slot, seed){
   state.currentSlot = slot;
+
   if(hasSave(slot)){
-    if(!loadGame(slot)){ showToast('Не удалось загрузить сохранение'); return; }
+    // ⚡ ЗАГРУЗКА — НЕ вызываем spawnAllEntities!
+    if(!loadGame(slot)){
+      showToast('Не удалось загрузить сохранение');
+      return;
+    }
   } else {
+    // Новая игра
     generateWorld(seed);
     resetPlayer();
     resetInventory();
+    spawnAllEntities(); // ← только здесь
   }
-  spawnAllEntities();
+
   state.savedSinceLastResume = false;
   clearInput();
   updateCamera();
@@ -179,9 +175,6 @@ function playSlot(slot, seed){
   enterGame();
 }
 
-// ============================================================
-// СПИСОК СЛОТОВ
-// ============================================================
 function showSlotsMenu(){
   renderSlotsList();
   showMenuOnly(menuSlots);
@@ -234,7 +227,9 @@ function renderSlotsList(){
       nb.textContent = 'Создать';
       nb.addEventListener('click', () => {
         const seed = prompt('Введите сид мира (пусто = случайный):', '');
-        const parsed = seed && seed.trim() !== '' ? (isNaN(seed) ? hashString(seed) : parseInt(seed, 10)) : Math.floor(Math.random() * 1e9);
+        const parsed = seed && seed.trim() !== ''
+          ? (isNaN(seed) ? hashString(seed) : parseInt(seed, 10))
+          : Math.floor(Math.random() * 1e9);
         playSlot(s, parsed);
       });
       actions.appendChild(nb);
@@ -245,18 +240,12 @@ function renderSlotsList(){
   }
 }
 
-// Хэш строки в число (для текстовых сидов)
 function hashString(str){
   let h = 0;
-  for(let i=0;i<str.length;i++){
-    h = (h * 31 + str.charCodeAt(i)) | 0;
-  }
+  for(let i=0;i<str.length;i++) h = (h * 31 + str.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
-// ============================================================
-// УДАЛЕНИЕ СЛОТА
-// ============================================================
 function openDeleteConfirm(s){
   state.deleteTarget = s;
   state.deleteCd = 5;
@@ -288,9 +277,6 @@ function closeDeleteConfirm(){
   showSlotsMenu();
 }
 
-// ============================================================
-// ПАУЗА
-// ============================================================
 function pauseGame(){
   state.gameState = 'paused';
   clearInput();
@@ -318,9 +304,6 @@ function refreshSaveButton(){
   }
 }
 
-// ============================================================
-// НАСТРОЙКИ
-// ============================================================
 function openSettings(from){
   state.settingsBackTo = from;
   renderSettingsUI();

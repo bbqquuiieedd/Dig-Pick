@@ -10,7 +10,6 @@ let pendingAttack = false;
 let mousedownTime = 0;
 const CLICK_THRESHOLD_MS = 250;
 
-// Для Q — выброс
 let qPressedTime = 0;
 let qIsHeld = false;
 const Q_HOLD_THRESHOLD = 400;
@@ -130,16 +129,15 @@ function onKeyUp(e){
   if(key) state.keys[key] = false;
   if(RU[key]) state.keys[RU[key]] = false;
 
-  // Отпустили Q
   const dropCode = settings.keybinds.dropItem || 'KeyQ';
   if(code === dropCode && qIsHeld){
     qIsHeld = false;
     const held = Date.now() - qPressedTime;
     if(state.gameState === 'playing' && !state.uiMode && !state.showRecipes){
       if(held < Q_HOLD_THRESHOLD){
-        dropSelectedItem(false); // 1 шт
+        dropSelectedItem(false);
       } else {
-        dropSelectedItem(true);  // весь стак
+        dropSelectedItem(true);
       }
     }
   }
@@ -157,13 +155,15 @@ function onMouseMove(e){
 }
 
 function onMouseDown(e){
+  // ============================================================
+  // ЛКМ
+  // ============================================================
   if(e.button === 0){
     state.mouse.left = true;
     if(state.uiMode || state.showRecipes){
       handleLeftClick();
       return;
     }
-    // Определяем, попали ли в блок в мире
     const { tx, ty } = mouseTile();
     let hitBlock = false;
     if(inBounds(tx, ty) && inReach(tx, ty)){
@@ -178,17 +178,82 @@ function onMouseDown(e){
       mousedownTime = Date.now();
     }
   }
+
+  // ============================================================
+  // ПКМ
+  // ============================================================
   if(e.button === 2){
     state.mouse.right = true;
     state.placingCooldown = 0;
+
     if(state.uiMode || state.showRecipes){
       handleRightClick();
-    } else {
-      // Сначала — попытка взаимодействия с сущностью
-      if(tryInteract()) return;
+      return;
     }
+
+    // 1) Клик по интерактивному блоку — обрабатываем МГНОВЕННО
+    if(handleRightClickOnBlock()) return;
+
+    // 2) Клик по сущности — взаимодействие
+    if(tryInteract()) return;
+
+    // 3) Иначе — мышь остаётся right=true, updatePlacing сработает для установки
   }
   e.preventDefault();
+}
+
+// ============================================================
+// ОБРАБОТКА ПКМ ПО ИНТЕРАКТИВНОМУ БЛОКУ
+// ============================================================
+function handleRightClickOnBlock(){
+  const { tx, ty } = mouseTile();
+  if(!inBounds(tx, ty) || !inReach(tx, ty)) return false;
+
+  const oid = state.objects[ty][tx];
+  if(oid === null) return false;
+
+  const objItem = ITEMS[oid];
+  if(!objItem || !objItem.interactive) return false;
+
+  // Замок — только для НЕ-дверей
+  const isDoor = (oid === O_DOOR || oid === O_GATE);
+  const lockedKey = `${tx},${ty}`;
+  if(!isDoor && state.lockedBlocks && state.lockedBlocks[lockedKey]){
+    if(typeof showToast === 'function') showToast('Это чужое');
+    return true;
+  }
+
+  // Клик по костру с кресалом в руке — зажигаем
+  const slot = state.hotbar[state.selectedHotbarSlot];
+  const item = slot ? ITEMS[slot.type] : null;
+  if(item && item.kind === 'tool' && item.tool === 'flintsteel' && oid === O_CAMPFIRE){
+    state.objects[ty][tx] = O_CAMPFIRE_LIT;
+    state.campfireLitAt[`${tx},${ty}`] = Date.now();
+    damageTool();
+    return true;
+  }
+
+  if(objItem.interactive === 'table'){ openTable(tx, ty); return true; }
+  if(objItem.interactive === 'furnace'){ openFurnace(tx, ty); return true; }
+  if(objItem.interactive === 'chest'){ openChest(tx, ty); return true; }
+  if(objItem.interactive === 'campfire'){ openCampfire(tx, ty); return true; }
+  if(objItem.interactive === 'door'){ toggleDoor(tx, ty); return true; }
+  if(objItem.interactive === 'gate'){ toggleGate(tx, ty); return true; }
+  if(objItem.interactive === 'bed'){ trySleep(tx, ty); return true; }
+  if(objItem.interactive === 'cake'){
+    const key = `${tx},${ty}`;
+    state.cakeBites[key] = (state.cakeBites[key] || 0) + 1;
+    state.player.hunger = Math.min(PLAYER_MAX_HUNGER, state.player.hunger + 1);
+    state.player.hp = Math.min(PLAYER_MAX_HP, state.player.hp + 1);
+    if(state.cakeBites[key] >= 10){
+      state.objects[ty][tx] = null;
+      delete state.cakeBites[key];
+      updateSolidAt(tx, ty);
+    }
+    return true;
+  }
+
+  return false;
 }
 
 function onMouseUp(e){
@@ -228,9 +293,8 @@ function onDoubleClick(e){
 
 function onWheel(e){
   if(state.uiMode === 'trade'){
-    // Скролл торговых рецептов
-    const total = TRADE_SELL.length + TRADE_BUY.length;
-    if(e.deltaY > 0) state.tradePage++;
+    const totalPages = Math.max(1, Math.ceil(Math.max(TRADE_SELL.length, TRADE_BUY.length) / 6));
+    if(e.deltaY > 0) state.tradePage = Math.min(totalPages - 1, state.tradePage + 1);
     else if(e.deltaY < 0) state.tradePage = Math.max(0, state.tradePage - 1);
     e.preventDefault();
     return;
@@ -243,7 +307,7 @@ function onWheel(e){
 }
 
 // ============================================================
-// ВЫБРОС ПРЕДМЕТА
+// ВЫБРОС
 // ============================================================
 function dropSelectedItem(wholeStack){
   const slot = state.hotbar[state.selectedHotbarSlot];
@@ -287,7 +351,6 @@ function handleLeftClick(){
   if(slotKey === 'btn_recipes'){ openRecipes(); return; }
   if(slotKey === 'btn_craft'){ tryCraft(); return; }
 
-  // Торговля
   if(state.uiMode === 'trade'){
     if(slotKey.startsWith('trade_sell_') || slotKey.startsWith('trade_buy_')){
       handleTradeClick(slotKey);
@@ -341,9 +404,7 @@ function handleLeftRelease(){
   const droppedOutside = (!slotKey || slotKey.startsWith('btn_') || slotKey === 'furnace_progress');
 
   if(droppedOutside){
-    // Выброс за пределы UI
     if(state.gameState === 'paused-ui'){
-      // В инвентаре — просто вернём (нельзя выбросить на паузе)
       setItemAt(state.dragging.from, state.dragging.item);
     } else {
       const angle = Math.atan2(state.player.facing.y, state.player.facing.x);
@@ -454,7 +515,6 @@ function handleRightRelease(){
 // ТОРГОВЛЯ
 // ============================================================
 function handleTradeClick(slotKey){
-  // slotKey: trade_sell_N или trade_buy_N
   const isSell = slotKey.startsWith('trade_sell_');
   const idx = parseInt(slotKey.replace('trade_sell_', '').replace('trade_buy_', ''), 10);
   const list = isSell ? TRADE_SELL : TRADE_BUY;
@@ -462,7 +522,6 @@ function handleTradeClick(slotKey){
   if(!entry) return;
 
   if(isSell){
-    // Проверяем, есть ли у игрока нужное количество
     if(!hasItemInInventory(entry.input, entry.count)){
       if(typeof showToast === 'function') showToast('Не хватает ' + ITEMS[entry.input].name);
       return;
@@ -471,7 +530,6 @@ function handleTradeClick(slotKey){
     addToInventory(I_EMERALD, entry.price);
     if(typeof showToast === 'function') showToast('+' + entry.price + ' изумруд(ов)');
   } else {
-    // Покупка — сначала проверим, есть ли изумруды
     if(!hasItemInInventory(I_EMERALD, entry.price)){
       if(typeof showToast === 'function') showToast('Не хватает изумрудов');
       return;
@@ -479,7 +537,6 @@ function handleTradeClick(slotKey){
     removeItemsFromInventory(I_EMERALD, entry.price);
     if(!addToInventory(entry.output, entry.count)){
       if(typeof showToast === 'function') showToast('Инвентарь полон');
-      // Возвращаем изумруды
       addToInventory(I_EMERALD, entry.price);
       return;
     }
@@ -516,7 +573,7 @@ function removeItemsFromInventory(type, count){
 }
 
 // ============================================================
-// СБОРКА СТАКОВ (двойной клик)
+// СБОРКА СТАКОВ
 // ============================================================
 function collectStack(slotKey){
   if(!slotKey) return;
