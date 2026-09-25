@@ -195,7 +195,7 @@ function isRightPressed() {
 
 // Зажата ли сейчас клавиша приседа (S или Shift)
 function wantsToCrouch() {
-  return !!(keys['KeyS'] || keys['ShiftLeft'] || keys['ShiftRight']);
+  return !!(keys['KeyS'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['ArrowDown']);
 }
 
 // ============================================================
