@@ -1,5 +1,5 @@
 // ============================================================
-//  Dig-Pick — основа платформера с текстурами
+//  Dig-Pick — платформер в стиле Terraria
 // ============================================================
 
 // ------------------------------------------------------------
@@ -13,12 +13,11 @@ const MAX_FALL   = 15;
 const WORLD_WIDTH  = 50;
 const WORLD_HEIGHT = 20;
 
-// Частота обновления физики (тиков в секунду).
-// Физика всегда идёт с этой частотой, вне зависимости от FPS.
+// Множитель скорости в приседе (0.5 = вдвое медленнее)
+const CROUCH_SPEED_MULT = 0.5;
+
 const TICK_RATE = 60;
 const TICK_DURATION = 1000 / TICK_RATE;
-
-// Защита от "спирали смерти" после сворачивания вкладки
 const MAX_ACCUMULATOR = 200;
 
 let VIEW_WIDTH  = 0;
@@ -32,13 +31,11 @@ const ctx    = canvas.getContext('2d');
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-
   VIEW_WIDTH  = window.innerWidth;
   VIEW_HEIGHT = window.innerHeight;
 
   canvas.width  = Math.floor(VIEW_WIDTH  * dpr);
   canvas.height = Math.floor(VIEW_HEIGHT * dpr);
-
   canvas.style.width  = VIEW_WIDTH  + 'px';
   canvas.style.height = VIEW_HEIGHT + 'px';
 
@@ -47,16 +44,17 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// ============================================================
+// ------------------------------------------------------------
 // 3. СИСТЕМА ТЕКСТУР
-// ============================================================
+// ------------------------------------------------------------
 const TEXTURE_PATHS = {
-  missing:       'Textures/PNG/missing.png',
-  grass:         'Textures/PNG/grass.png',
-  dirt:          'Textures/PNG/dirt.png',
-  player:        'Textures/PNG/player.png',
-  // Спрайт приседа — 32×32 (1 блок × 1 блок)
-  playerCrouch:  'Textures/PNG/player_crouch.png',
+  missing:      'Textures/PNG/missing.png',
+  grass:        'Textures/PNG/grass.png',
+  dirt:         'Textures/PNG/dirt.png',
+  player:       'Textures/PNG/player.png',        // 32×64, смотрит вправо
+  playerCrouch: 'Textures/PNG/player_crouch.png', // 32×32
+  playerJump:   'Textures/PNG/player_jump.png',   // 32×64 — летит вверх
+  playerFall:   'Textures/PNG/player_fall.png',   // 32×64 — падает
 };
 
 const textures = {};
@@ -82,10 +80,10 @@ async function loadAllTextures() {
   keys.forEach((key, i) => {
     textures[key] = images[i] || textures.missing;
   });
-
   console.log('Текстуры загружены:', textures);
 }
 
+// Обычная отрисовка текстуры
 function drawTexture(name, x, y, w, h) {
   const tex = textures[name];
   if (tex && tex.complete && tex.naturalWidth > 0) {
@@ -93,14 +91,27 @@ function drawTexture(name, x, y, w, h) {
   }
 }
 
-// ============================================================
-// 4. МИР
-// ============================================================
-const TILE_TEXTURES = {
-  1: 'dirt',
-  2: 'grass',
-};
+// Отрисовка с горизонтальным отражением.
+// flip = true — отражаем по X (персонаж смотрит влево).
+function drawTextureFlipped(name, x, y, w, h, flip) {
+  const tex = textures[name];
+  if (!tex || !tex.complete || tex.naturalWidth === 0) return;
 
+  if (flip) {
+    ctx.save();
+    ctx.translate(x + w, y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(tex, 0, 0, w, h);
+    ctx.restore();
+  } else {
+    ctx.drawImage(tex, x, y, w, h);
+  }
+}
+
+// ------------------------------------------------------------
+// 4. МИР
+// ------------------------------------------------------------
+const TILE_TEXTURES = { 1: 'dirt', 2: 'grass' };
 const SURFACE_ROW = WORLD_HEIGHT - 5;
 
 const world = [];
@@ -123,9 +134,9 @@ function isSolid(bx, by) {
   return world[by][bx] !== 0;
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // 5. ИГРОК
-// ============================================================
+// ------------------------------------------------------------
 const PLAYER_STAND_HEIGHT  = TILE_SIZE * 2; // 64
 const PLAYER_CROUCH_HEIGHT = TILE_SIZE;     // 32
 
@@ -138,35 +149,43 @@ const player = {
   vy: 0,
   onGround: false,
   isCrouching: false,
+  facing: 'right',
 };
 
-// ============================================================
+// ------------------------------------------------------------
 // 6. УПРАВЛЕНИЕ
-// ============================================================
+// ------------------------------------------------------------
 const keys = {};
-
-// Какая сторона была нажата ПОСЛЕДНЕЙ: 'left' | 'right' | null.
-// Если зажаты обе — идём в ту, что нажали последней.
 let lastDirectionKey = null;
 
 function isLeftKey(code)  { return code === 'KeyA' || code === 'ArrowLeft';  }
 function isRightKey(code) { return code === 'KeyD' || code === 'ArrowRight'; }
+function isLeftPressed()  { return !!(keys['KeyA'] || keys['ArrowLeft']);  }
+function isRightPressed() { return !!(keys['KeyD'] || keys['ArrowRight']); }
+
+function wantsToCrouch() {
+  return !!(keys['KeyS'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['ArrowDown']);
+}
+
+function isJumpPressed() {
+  return !!(keys['Space'] || keys['KeyW'] || keys['ArrowUp']);
+}
 
 window.addEventListener('keydown', (e) => {
-  // Не обрабатываем автоповтор — иначе lastDirectionKey будет
-  // постоянно "обновляться" на ту же клавишу, но это не страшно.
-  // Однако с автоповтором могут быть глюки, если зажать A, потом D,
-  // потом снова A — все три события придут как keydown. Поэтому
-  // отслеживаем только реальные переходы (было не нажато → стало нажато).
   const wasPressed = keys[e.code] === true;
   keys[e.code] = true;
+
+  if (e.code === 'F3') {
+    debugOverlay = !debugOverlay;
+    e.preventDefault();
+  }
 
   if (!wasPressed) {
     if (isLeftKey(e.code))  lastDirectionKey = 'left';
     if (isRightKey(e.code)) lastDirectionKey = 'right';
   }
 
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'F3'].includes(e.code)) {
     e.preventDefault();
   }
 });
@@ -174,40 +193,23 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   keys[e.code] = false;
 
-  // Если отпустили "главную" клавишу — переключаемся на ту,
-  // которая ещё зажата (если есть).
   if (isLeftKey(e.code) && lastDirectionKey === 'left') {
-    if (isRightPressed())      lastDirectionKey = 'right';
-    else                       lastDirectionKey = null;
+    lastDirectionKey = isRightPressed() ? 'right' : null;
   }
   if (isRightKey(e.code) && lastDirectionKey === 'right') {
-    if (isLeftPressed())       lastDirectionKey = 'left';
-    else                       lastDirectionKey = null;
+    lastDirectionKey = isLeftPressed() ? 'left' : null;
   }
 });
 
-function isLeftPressed() {
-  return !!(keys['KeyA'] || keys['ArrowLeft']);
-}
-function isRightPressed() {
-  return !!(keys['KeyD'] || keys['ArrowRight']);
-}
-
-// Зажата ли сейчас клавиша приседа (S или Shift)
-function wantsToCrouch() {
-  return !!(keys['KeyS'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['ArrowDown']);
-}
-
-// ============================================================
-// 7. ПРИСЕДАНИЕ
-// ============================================================
+// ------------------------------------------------------------
+// 7. ПРИСЕД
+// ------------------------------------------------------------
 function canStandUp() {
   const feetY   = player.y + player.height;
   const newTopY = feetY - PLAYER_STAND_HEIGHT;
 
   const topTile    = Math.floor(newTopY / TILE_SIZE);
   const bottomTile = Math.floor((player.y - 0.01) / TILE_SIZE);
-
   const left  = Math.floor((player.x + 1) / TILE_SIZE);
   const right = Math.floor((player.x + player.width - 1) / TILE_SIZE);
 
@@ -219,27 +221,38 @@ function canStandUp() {
   return true;
 }
 
-function updateCrouch() {
-  const want = wantsToCrouch();
+function standUp() {
+  const feetY = player.y + player.height;
+  player.height = PLAYER_STAND_HEIGHT;
+  player.y = feetY - player.height;
+  player.isCrouching = false;
+}
 
+function crouchDown() {
+  const feetY = player.y + player.height;
+  player.height = PLAYER_CROUCH_HEIGHT;
+  player.y = feetY - player.height;
+  player.isCrouching = true;
+}
+
+function updateCrouch() {
+  // В воздухе не приседаем — там прыжковый/падающий спрайт и полный рост.
+  if (!player.onGround) {
+    if (player.isCrouching) standUp();
+    return;
+  }
+
+  const want = wantsToCrouch();
   if (want && !player.isCrouching) {
-    const feetY = player.y + player.height;
-    player.height = PLAYER_CROUCH_HEIGHT;
-    player.y = feetY - player.height;
-    player.isCrouching = true;
+    crouchDown();
   } else if (!want && player.isCrouching) {
-    if (canStandUp()) {
-      const feetY = player.y + player.height;
-      player.height = PLAYER_STAND_HEIGHT;
-      player.y = feetY - player.height;
-      player.isCrouching = false;
-    }
+    if (canStandUp()) standUp();
   }
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // 8. КОЛЛИЗИИ
-// ============================================================
+// ------------------------------------------------------------
 function resolveX() {
   const top    = Math.floor((player.y + 1) / TILE_SIZE);
   const bottom = Math.floor((player.y + player.height - 1) / TILE_SIZE);
@@ -293,26 +306,36 @@ function resolveY() {
   }
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // 9. ОБНОВЛЕНИЕ ИГРОКА (один тик)
-// ============================================================
+// ------------------------------------------------------------
 function updatePlayer() {
-  updateCrouch();
+  // 1. Горизонтальный ввод. Скорость зависит от приседа.
+  const speed = player.isCrouching ? MOVE_SPEED * CROUCH_SPEED_MULT : MOVE_SPEED;
 
-  // Горизонтальный ввод — учитываем последнюю нажатую клавишу.
-  // Если зажаты обе — идём в сторону той, что нажали позже.
   player.vx = 0;
-  if (lastDirectionKey === 'left')  player.vx = -MOVE_SPEED;
-  if (lastDirectionKey === 'right') player.vx =  MOVE_SPEED;
+  if (lastDirectionKey === 'left')  player.vx = -speed;
+  if (lastDirectionKey === 'right') player.vx =  speed;
 
-  if ((keys['Space'] || keys['KeyW'] || keys['ArrowUp']) && player.onGround) {
+  // Запоминаем направление для отрисовки.
+  if (player.vx > 0) player.facing = 'right';
+  else if (player.vx < 0) player.facing = 'left';
+
+  // 2. Прыжок. Если сидим — принудительно встаём.
+  if (isJumpPressed() && player.onGround) {
+    if (player.isCrouching) standUp();
     player.vy = JUMP_VEL;
     player.onGround = false;
   }
 
+  // 3. Присед
+  updateCrouch();
+
+  // 4. Гравитация
   player.vy += GRAVITY;
   if (player.vy > MAX_FALL) player.vy = MAX_FALL;
 
+  // 5. Движение и коллизии
   player.x += player.vx;
   resolveX();
 
@@ -320,9 +343,9 @@ function updatePlayer() {
   resolveY();
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // 10. КАМЕРА
-// ============================================================
+// ------------------------------------------------------------
 const camera = { x: 0, y: 0 };
 
 function updateCamera() {
@@ -350,9 +373,20 @@ function updateCamera() {
   }
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // 11. ОТРИСОВКА
-// ============================================================
+// ------------------------------------------------------------
+// Возвращает имя текстуры игрока в зависимости от состояния.
+function getPlayerTexture() {
+  if (!player.onGround) {
+    // В воздухе: летит вверх или падает.
+    // vy === 0 (пик прыжка) считаем падением — так реже мелькает не тот спрайт.
+    return player.vy < 0 ? 'playerJump' : 'playerFall';
+  }
+  if (player.isCrouching) return 'playerCrouch';
+  return 'player';
+}
+
 function draw() {
   ctx.fillStyle = '#87CEEB';
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
@@ -367,26 +401,80 @@ function draw() {
       const tile = getTile(bx, by);
       if (tile === 0) continue;
 
-      const texName = TILE_TEXTURES[tile];
-      const screenX = bx * TILE_SIZE - camera.x;
-      const screenY = by * TILE_SIZE - camera.y;
-
-      drawTexture(texName, screenX, screenY, TILE_SIZE, TILE_SIZE);
+      drawTexture(
+        TILE_TEXTURES[tile],
+        bx * TILE_SIZE - camera.x,
+        by * TILE_SIZE - camera.y,
+        TILE_SIZE, TILE_SIZE
+      );
     }
   }
 
-  // Игрок. Если сидит — рисуем отдельную crouch-текстуру.
-  // Если её нет, drawTexture молча ничего не нарисует
-  // (а сама текстура уже подменена на missing при загрузке).
+  // Игрок
+  const texName = getPlayerTexture();
   const screenX = player.x - camera.x;
   const screenY = player.y - camera.y;
-  const texName = player.isCrouching ? 'playerCrouch' : 'player';
-  drawTexture(texName, screenX, screenY, player.width, player.height);
+  const flip    = (player.facing === 'left');
+
+  drawTextureFlipped(texName, screenX, screenY, player.width, player.height, flip);
+
+  if (debugOverlay) drawDebug();
 }
 
-// ============================================================
-// 12. ИГРОВОЙ ЦИКЛ С ФИКСИРОВАННЫМ ШАГОМ
-// ============================================================
+// ------------------------------------------------------------
+// 12. ОТЛАДОЧНЫЙ ОВЕРЛЕЙ (F3)
+// ------------------------------------------------------------
+let debugOverlay = false;
+
+const TRACKED_KEYS = [
+  'KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space',
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+  'ShiftLeft', 'ShiftRight'
+];
+
+function drawDebug() {
+  const padX = 10;
+  const padY = 10;
+  const lineHeight = 18;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(padX, padY, 320, 300);
+
+  ctx.font = '14px monospace';
+  ctx.textBaseline = 'top';
+
+  let line = 0;
+  const print = (text, color) => {
+    ctx.fillStyle = color || '#0f0';
+    ctx.fillText(text, padX + 8, padY + 8 + line * lineHeight);
+    line++;
+  };
+
+  print('=== DEBUG (F3) ===', '#ff0');
+  print('');
+  print('Нажатые клавиши:', '#fff');
+
+  for (const code of TRACKED_KEYS) {
+    const pressed = !!keys[code];
+    const color = pressed ? '#0f0' : '#444';
+    const mark = pressed ? '[X]' : '[ ]';
+    print(`  ${mark} ${code}`, color);
+  }
+
+  print('');
+  print('Игрок:', '#fff');
+  print(`  x=${player.x.toFixed(1)} y=${player.y.toFixed(1)}`);
+  print(`  vx=${player.vx.toFixed(2)} vy=${player.vy.toFixed(2)}`);
+  print(`  onGround=${player.onGround}`, player.onGround ? '#0f0' : '#f80');
+  print(`  crouch=${player.isCrouching}`, player.isCrouching ? '#0f0' : '#888');
+  print(`  facing=${player.facing}`, '#fff');
+  print(`  tex=${getPlayerTexture()}`, '#0ff');
+  print(`  jumpPressed=${isJumpPressed()}`, isJumpPressed() ? '#0f0' : '#888');
+}
+
+// ------------------------------------------------------------
+// 13. ИГРОВОЙ ЦИКЛ С ФИКСИРОВАННЫМ ШАГОМ
+// ------------------------------------------------------------
 let accumulator = 0;
 let lastTime = 0;
 
@@ -408,9 +496,9 @@ function gameLoop(now) {
   requestAnimationFrame(gameLoop);
 }
 
-// ============================================================
-// 13. СТАРТ ИГРЫ
-// ============================================================
+// ------------------------------------------------------------
+// 14. СТАРТ ИГРЫ
+// ------------------------------------------------------------
 async function startGame() {
   await loadAllTextures();
   requestAnimationFrame(gameLoop);

@@ -1,21 +1,4 @@
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  background: #1a1a1a;
   overflow: hidden;
-  font-family: Arial, sans-serif;
-}
-
-canvas {
-  display: block;
-  width: 100vw;
-  height: 100vh;
-  /* pixelated оставляем — чтобы текстуры не размывались при масштабировании.
-     Размер canvas теперь совпадает с физическими пикселями экрана,
-     поэтому "мозаики" не будет. */
-  image-rendering: pixelated;
+  margin: 0;
 }
