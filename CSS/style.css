@@ -1,13 +1,25 @@
+@font-face {
+  font-family: 'DigPickFont';
+  src: url('../Materials/TTF Fonts/font.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  font-family: 'DigPickFont', monospace;
+}
+
+html, body {
+  cursor: none;
 }
 
 body {
   background: #1a1a1a;
   overflow: hidden;
-  font-family: Arial, sans-serif;
 }
 
 canvas {
@@ -15,4 +27,19 @@ canvas {
   width: 100vw;
   height: 100vh;
   image-rendering: pixelated;
+  cursor: none;
+}
+
+#cursor {
+  position: fixed;
+  left: -100px;
+  top: -100px;
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+  image-rendering: pixelated;
+  z-index: 9999;
+  user-select: none;
+  cursor: none;
+  transition: opacity 0.08s linear;
 }
