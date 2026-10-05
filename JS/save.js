@@ -13,6 +13,17 @@ function deserializeChunks(obj) {
   for (const key in obj) chunks.set(key, obj[key]);
 }
 
+function serializeWallChunks() {
+  const out = {};
+  for (const [key, data] of wallChunks.entries()) out[key] = data;
+  return out;
+}
+
+function deserializeWallChunks(obj) {
+  wallChunks.clear();
+  for (const key in obj) wallChunks.set(key, obj[key]);
+}
+
 function formatSavedAt(ts) {
   const d = new Date(ts);
   const pad = (n) => n.toString().padStart(2, '0');
@@ -29,7 +40,8 @@ function saveGame() {
     spawn: { x: spawnPoint.x, y: spawnPoint.y },
     slots: slots.map(s => s ? { tileId: s.tileId, count: s.count } : null),
     activeSlot,
-    chunks: serializeChunks(),
+    chunks:     serializeChunks(),
+    wallChunks: serializeWallChunks(),
   };
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -56,6 +68,7 @@ function loadGame() {
     const data = JSON.parse(raw);
     if (data.version !== SAVE_VERSION) return false;
     deserializeChunks(data.chunks || {});
+    deserializeWallChunks(data.wallChunks || {});
     resetPlayer();
     if (data.player) {
       player.x = data.player.x; player.y = data.player.y;
@@ -77,7 +90,9 @@ function loadGame() {
 function deleteSave() { localStorage.removeItem(SAVE_KEY); }
 
 function startNewGame() {
-  deleteSave(); clearWorld(); resetPlayer();
+  deleteSave();
+  clearWorld();
+  resetPlayer();
   for (let i = 0; i < INVENTORY_SLOTS; i++) slots[i] = null;
   activeSlot = 0;
   breakingBlock = null; breakingProgress = 0;

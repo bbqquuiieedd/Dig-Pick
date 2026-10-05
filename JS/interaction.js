@@ -53,6 +53,24 @@ function tryPlaceBlock() {
   hasUnsavedChanges = true;
 }
 
+// ------------------------------------------------------------
+// Время копания блока с учётом текущего инструмента.
+// Сейчас инструментов нет — всегда работаем «руками»,
+// то есть с множителем HAND_MULTIPLIER.
+// ------------------------------------------------------------
+function getToolMultiplier(tileId) {
+  const def = TILE_DEFS[tileId];
+  if (!def) return HAND_MULTIPLIER;
+
+  // Ищем инструмент в руке (сейчас всегда null — задел на будущее)
+  const item = slots[activeSlot];
+  const heldTool = (item && item.toolType) ? item.toolType : null;
+
+  if (!heldTool) return HAND_MULTIPLIER;
+  if (heldTool === def.tool) return 1;              // правильный инструмент
+  return WRONG_TOOL_MULTIPLIER;
+}
+
 function updateBreaking() {
   if (!mouse.leftHeld) { breakingBlock = null; breakingProgress = 0; return; }
   const target = getTargetTile();
@@ -61,13 +79,26 @@ function updateBreaking() {
   if (tile === TILE_AIR || !TILE_DEFS[tile] || !TILE_DEFS[tile].breakable) {
     breakingBlock = null; breakingProgress = 0; return;
   }
+
   if (!breakingBlock || breakingBlock.bx !== target.bx || breakingBlock.by !== target.by) {
     breakingBlock = { bx: target.bx, by: target.by };
     breakingProgress = 0;
   }
-  breakingProgress += BREAK_PROGRESS_PER_TICK;
+
+  // Скорость копания: 1 / (hardness * множитель * TICK_RATE)
+  const def = TILE_DEFS[tile];
+  const mult = getToolMultiplier(tile);
+  const perTick = 1 / (def.hardness * mult * TICK_RATE);
+  breakingProgress += perTick;
+
   if (breakingProgress >= 1) {
-    if (tryAddToInventory(tile)) setTile(breakingBlock.bx, breakingBlock.by, TILE_AIR);
-    breakingBlock = null; breakingProgress = 0;
+    // Дроп: у травы это земля, у камня — камень
+    const dropId = def.drop;
+    if (dropId !== null && Math.random() < def.dropChance) {
+      tryAddToInventory(dropId);
+    }
+    setTile(breakingBlock.bx, breakingBlock.by, TILE_AIR);
+    breakingBlock = null;
+    breakingProgress = 0;
   }
 }

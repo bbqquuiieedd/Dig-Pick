@@ -1,10 +1,13 @@
 // ============================================================
-//  world.js — чанки, чтение/запись тайлов
+//  world.js — чанки, чтение/запись тайлов и стен
 // ============================================================
 
 const chunks = new Map();
 function chunkKey(cx, cy) { return cx + ',' + cy; }
 
+// ------------------------------------------------------------
+// ГЕНЕРАЦИЯ ЧАНКА БЛОКОВ
+// ------------------------------------------------------------
 function generateChunk(cx, cy) {
   const data = [];
   for (let ly = 0; ly < CHUNK_H; ly++) {
@@ -13,10 +16,10 @@ function generateChunk(cx, cy) {
     for (let lx = 0; lx < CHUNK_W; lx++) {
       let tile = TILE_AIR;
       if (cy === 0) {
-        if (wy === SURFACE_ROW)                        tile = TILE_GRASS;
+        if (wy === SURFACE_ROW)                                  tile = TILE_GRASS;
         else if (wy >= SURFACE_ROW + 1 && wy <= SURFACE_ROW + 4) tile = TILE_DIRT;
-        else if (wy >= SURFACE_ROW + 5 && wy <= 38)    tile = TILE_STONE;
-        else if (wy === 39)                            tile = TILE_BEDROCK;
+        else if (wy >= SURFACE_ROW + 5 && wy <= 38)              tile = TILE_STONE;
+        else if (wy === 39)                                      tile = TILE_BEDROCK;
       } else if (cy > 0) {
         tile = TILE_BEDROCK;
       }
@@ -56,4 +59,7 @@ function isSolid(bx, by) {
   return TILE_DEFS[t] ? TILE_DEFS[t].solid : false;
 }
 
-function clearWorld() { chunks.clear(); }
+function clearWorld() {
+  chunks.clear();
+  clearWalls();
+}

@@ -6,12 +6,24 @@ const TEX_BASE = 'Materials/PNG Textures/';
 
 const TEXTURE_PATHS = {
   missing: TEX_BASE + 'missing.png',
+
+  // Блоки
   dirt:    TEX_BASE + 'dirt.png',
   stone:   TEX_BASE + 'stone.png',
   bedrock: TEX_BASE + 'bedrock.png',
 
-  // Иконка травы (используется как оверлей поверх dirt)
+  // Стены (задний фон)
+  dirt_wall:    TEX_BASE + 'dirt_wall.png',
+  stone_wall:   TEX_BASE + 'stone_wall.png',
+  bedrock_wall: TEX_BASE + 'bedrock_wall.png',
+
+  // Трава — оверлей поверх dirt
   grass:   TEX_BASE + 'grass.png',
+
+  // Персонаж
+  playerStand: TEX_BASE + 'player_stand.png',
+  playerJump:  TEX_BASE + 'player_jump.png',
+  playerWalk:  TEX_BASE + 'player_walk.png',
 
   // Кирка и искры
   pickaxeIron: TEX_BASE + 'pickaxe_iron.png',
@@ -20,11 +32,6 @@ const TEXTURE_PATHS = {
   // Прочее
   frame:        TEX_BASE + 'frame.png',
   cracks:       TEX_BASE + 'cracks.png',
-
-  // Персонаж
-  playerStand: TEX_BASE + 'player_stand.png',
-  playerJump:  TEX_BASE + 'player_jump.png',
-  playerWalk:  TEX_BASE + 'player_walk.png',
   logo:         TEX_BASE + 'logo.png',
   menuBg:       TEX_BASE + 'background.png',
   autosaveIcon: TEX_BASE + 'save.png',
@@ -43,9 +50,13 @@ function loadImage(src) {
 
 async function loadAllTextures() {
   textures.missing = await loadImage(TEXTURE_PATHS.missing);
+
   const keysArr = Object.keys(TEXTURE_PATHS).filter(k => k !== 'missing');
   const images = await Promise.all(keysArr.map(k => loadImage(TEXTURE_PATHS[k])));
-  keysArr.forEach((key, i) => { textures[key] = images[i] || textures.missing; });
+  keysArr.forEach((key, i) => {
+    textures[key] = images[i] || textures.missing;
+  });
+
   console.log('Текстуры загружены');
 }
 

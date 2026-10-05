@@ -6,11 +6,21 @@
 const TILE_SIZE    = 8;
 const RENDER_SCALE = 4;
 
-// --- Физика (мировые пиксели) ---
+// --- Физика (мировые пиксели за тик) ---
 const GRAVITY    = 0.125;
-const MOVE_SPEED = 1;
+const MAX_MOVE_SPEED = 1;      // потолок скорости по X
 const JUMP_VEL   = -2.5;
 const MAX_FALL   = 3.75;
+
+// --- Инерция (ускорение/трение по X) ---
+const PLAYER_ACCEL        = 0.12;   // разгон на земле
+const PLAYER_FRICTION     = 0.20;   // торможение на земле
+const PLAYER_AIR_ACCEL    = 0.06;   // разгон в воздухе
+const PLAYER_AIR_FRICTION = 0.02;   // торможение в воздухе
+
+// --- Прощение прыжка ---
+const COYOTE_TIME = 0.10;   // сек. после схода с платформы — можно прыгнуть
+const JUMP_BUFFER = 0.10;   // сек. — нажатие прыжка запомнится до приземления
 
 // --- Время ---
 const TICK_RATE = 60;
@@ -25,8 +35,10 @@ const SURFACE_ROW = 20;
 // --- Взаимодействие ---
 const INTERACTION_RANGE_TILES = 5;
 const INTERACTION_RANGE = INTERACTION_RANGE_TILES * TILE_SIZE;
-const BREAK_TIME = 1.0;
-const BREAK_PROGRESS_PER_TICK = 1 / (TICK_RATE * BREAK_TIME);
+
+// Множители скорости копания
+const HAND_MULTIPLIER      = 2.0;   // без инструмента — в 2 раза медленнее
+const WRONG_TOOL_MULTIPLIER = 4.0;  // с неподходящим инструментом — в 4 раза
 
 // --- Инвентарь ---
 const INVENTORY_COLS = 10;
@@ -43,7 +55,7 @@ const PLAYER_WIDTH  = TILE_SIZE * 1.5;
 const PLAYER_HEIGHT = TILE_SIZE * 2.5;
 
 // --- Сохранения ---
-const SAVE_VERSION = "0.2";
+const SAVE_VERSION = "0.3";          // подняли версию — добавлены стены и новые поля
 const SAVE_KEY = "digpick_save";
 const SETTINGS_KEY = "digpick_settings";
 
@@ -60,13 +72,12 @@ const AUTOSAVE_ICON_DURATION = 1500;
 const FONT_FAMILY = 'DigPickFont';
 
 // --- Кирка в главном меню ---
-const PICKAXE_SIZE = 104;                // совпадает с CSS font-size: 104px
-const PICKAXE_Y    = 30;                 // отступ сверху
-const PICKAXE_ANIM_DURATION = 700;       // мс
+const PICKAXE_SIZE = 104;
+const PICKAXE_Y    = 30;
+const PICKAXE_ANIM_DURATION = 700;
 
-// --- Заголовок под киркой ---
 const TITLE_FONT_SIZE = 42;
-const TITLE_Y_OFFSET  = 30;              // отступ от нижнего края кирки
+const TITLE_Y_OFFSET  = 30;
 
 // ------------------------------------------------------------
 // ХОЛСТ
@@ -135,7 +146,11 @@ const keys = {};
 const justPressedKeys = new Set();
 const mouse = { x: 0, y: 0, wx: 0, wy: 0, leftHeld: false };
 
-// --- Кирка: анимация и искры ---
+// Кирка: анимация и искры
 let pickaxeAnimStart = 0;
 let pickaxeSparks = [];
 let pickaxeSparkLastFrame = 0;
+
+// Игрок: таймеры прощения прыжка
+let coyoteTimer   = 0;   // сколько секунд осталось на «прощённый» прыжок
+let jumpBufferTimer = 0; // сколько секунд осталось на «запомненный» прыжок
