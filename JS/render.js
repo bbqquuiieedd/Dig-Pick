@@ -3,10 +3,7 @@
 // ============================================================
 
 function getPlayerTexture() {
-  // В воздухе — прыжковый спрайт (он же для падения)
   if (!player.onGround) return 'playerJump';
-
-  // На земле: движется — walk, стоит — stand
   if (Math.abs(player.vx) > 0.01) return 'playerWalk';
   return 'playerStand';
 }
@@ -36,27 +33,14 @@ function drawWorld() {
   }
 
   // --- 2. Блоки (передний план) ---
+  // Трава рисуется своей текстурой (grass.png), без наложения на dirt.
   for (let by = startY; by <= endY; by++) {
     for (let bx = startX; bx <= endX; bx++) {
       const tile = getTile(bx, by);
       if (tile === TILE_AIR) continue;
-
-      const px = bx * TILE_SIZE;
-      const py = by * TILE_SIZE;
-
-      if (tile === TILE_GRASS) {
-        // Трава: dirt + grass-шапка, если сверху воздух
-        const above = getTile(bx, by - 1);
-        drawTexture('dirt', px, py, TILE_SIZE, TILE_SIZE);
-        if (above === TILE_AIR) {
-          drawTextureIfExists('grass', px, py, TILE_SIZE, TILE_SIZE);
-        }
-      } else {
-        const def = TILE_DEFS[tile];
-        if (def && def.texture) {
-          drawTexture(def.texture, px, py, TILE_SIZE, TILE_SIZE);
-        }
-      }
+      const def = TILE_DEFS[tile];
+      if (!def || !def.texture) continue;
+      drawTexture(def.texture, bx * TILE_SIZE, by * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
   }
 
@@ -90,17 +74,13 @@ function drawDebug() {
   const def = TILE_DEFS[tile];
 
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(10, VIEW_HEIGHT - 60, 380, 50);
+  ctx.fillRect(10, VIEW_HEIGHT - 80, 400, 70);
   ctx.fillStyle = '#0ff';
   ctx.font = '13px ' + FONT_FAMILY;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(
-    `(${ct.bx},${ct.by}) tile: ${def ? def.name : '?'}`,
-    16, VIEW_HEIGHT - 45
-  );
-  ctx.fillText(
-    `wall: ${WALL_DEFS[wall] ? WALL_DEFS[wall].name : '?'}  hardness: ${def ? def.hardness : '-'}`,
-    16, VIEW_HEIGHT - 25
-  );
+
+  ctx.fillText(`Сид: ${activeWorldSeed}`, 16, VIEW_HEIGHT - 65);
+  ctx.fillText(`(${ct.bx},${ct.by}) tile: ${def ? def.name : '?'}`, 16, VIEW_HEIGHT - 45);
+  ctx.fillText(`wall: ${WALL_DEFS[wall] ? WALL_DEFS[wall].name : '?'}`, 16, VIEW_HEIGHT - 25);
 }

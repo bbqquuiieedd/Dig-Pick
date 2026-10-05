@@ -8,19 +8,19 @@ const RENDER_SCALE = 4;
 
 // --- Физика (мировые пиксели за тик) ---
 const GRAVITY    = 0.125;
-const MAX_MOVE_SPEED = 1;      // потолок скорости по X
+const MAX_MOVE_SPEED = 1;
 const JUMP_VEL   = -2.5;
 const MAX_FALL   = 3.75;
 
-// --- Инерция (ускорение/трение по X) ---
-const PLAYER_ACCEL        = 0.12;   // разгон на земле
-const PLAYER_FRICTION     = 0.20;   // торможение на земле
-const PLAYER_AIR_ACCEL    = 0.06;   // разгон в воздухе
-const PLAYER_AIR_FRICTION = 0.02;   // торможение в воздухе
+// --- Инерция ---
+const PLAYER_ACCEL        = 0.12;
+const PLAYER_FRICTION     = 0.20;
+const PLAYER_AIR_ACCEL    = 0.06;
+const PLAYER_AIR_FRICTION = 0.02;
 
 // --- Прощение прыжка ---
-const COYOTE_TIME = 0.10;   // сек. после схода с платформы — можно прыгнуть
-const JUMP_BUFFER = 0.10;   // сек. — нажатие прыжка запомнится до приземления
+const COYOTE_TIME = 0.10;
+const JUMP_BUFFER = 0.10;
 
 // --- Время ---
 const TICK_RATE = 60;
@@ -32,13 +32,24 @@ const CHUNK_W = 20;
 const CHUNK_H = 40;
 const SURFACE_ROW = 20;
 
+// --- Генерация мира ---
+const DEFAULT_SEED = Math.floor(Math.random() * 1000000);
+const SURFACE_AMPLITUDE = 3;
+const CAVE_THRESHOLD    = 0.42;
+const COAL_THRESHOLD    = 0.60;
+const IRON_THRESHOLD    = 0.68;
+
+// Плотность деревьев: 0.10 = примерно 1 дерево на 10 колонок
+const TREE_DENSITY      = 0.10;
+const TREE_MIN_HEIGHT   = 4;
+const TREE_MAX_HEIGHT   = 6;
+
 // --- Взаимодействие ---
 const INTERACTION_RANGE_TILES = 5;
 const INTERACTION_RANGE = INTERACTION_RANGE_TILES * TILE_SIZE;
 
-// Множители скорости копания
-const HAND_MULTIPLIER      = 2.0;   // без инструмента — в 2 раза медленнее
-const WRONG_TOOL_MULTIPLIER = 4.0;  // с неподходящим инструментом — в 4 раза
+const HAND_MULTIPLIER        = 2.0;
+const WRONG_TOOL_MULTIPLIER  = 4.0;
 
 // --- Инвентарь ---
 const INVENTORY_COLS = 10;
@@ -55,8 +66,6 @@ const PLAYER_WIDTH  = TILE_SIZE * 1.5;
 const PLAYER_HEIGHT = TILE_SIZE * 2.5;
 
 // --- Сохранения ---
-// Старая система (одно сохранение целиком) заменена на раздельные:
-// персонаж и мир лежат в разных ключах localStorage.
 const CHAR_VERSION  = '1';
 const WORLD_VERSION = '1';
 const CHAR_KEY_PREFIX  = 'digpick_char_';
@@ -72,6 +81,9 @@ const AUTOSAVE_OPTIONS = [
   { label: '5 мин',  value: 300000 },
 ];
 const AUTOSAVE_ICON_DURATION = 1500;
+
+// --- Чат ---
+const CHAT_OVERLAY_DURATION = 5000;
 
 // --- Шрифт ---
 const FONT_FAMILY = 'DigPickFont';
@@ -151,6 +163,15 @@ const keys = {};
 const justPressedKeys = new Set();
 const mouse = { x: 0, y: 0, wx: 0, wy: 0, leftHeld: false };
 
+// Кирка: анимация и искры
+let pickaxeAnimStart = 0;
+let pickaxeSparks = [];
+let pickaxeSparkLastFrame = 0;
+
+// Игрок: таймеры прощения прыжка
+let coyoteTimer   = 0;
+let jumpBufferTimer = 0;
+
 // Консоль
 let consoleOpen = false;
 let consoleLog = [];
@@ -159,20 +180,10 @@ let consoleHistory = [];
 let consoleHistoryIndex = -1;
 
 // Чат
-const CHAT_OVERLAY_DURATION = 5000;  // мс — сколько висит сообщение
-let chatMessages = [];        // [{ author, text, time }]
-let chatOverlayUntil = 0;     // timestamp, до которого показывается оверлей
+let chatMessages = [];
+let chatOverlayUntil = 0;
 
-
-// Активные персонаж и мир (id из meta)
+// Активные персонаж и мир
 let activeCharId  = null;
 let activeWorldId = null;
-
-// Кирка: анимация и искры
-let pickaxeAnimStart = 0;
-let pickaxeSparks = [];
-let pickaxeSparkLastFrame = 0;
-
-// Игрок: таймеры прощения прыжка
-let coyoteTimer   = 0;   // сколько секунд осталось на «прощённый» прыжок
-let jumpBufferTimer = 0; // сколько секунд осталось на «запомненный» прыжок
+let activeWorldSeed = null;

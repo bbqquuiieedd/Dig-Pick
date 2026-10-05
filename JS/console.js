@@ -294,7 +294,7 @@ registerCommand('heal', 'Восстановить здоровье (пока н�
 });
 
 registerCommand('seed', 'Показать сид мира', () => {
-  logConsole('Сид: ' + (activeWorldId || 'не задан'), '#88ff88');
+  logConsole('Сид: ' + (activeWorldSeed !== null ? activeWorldSeed : 'не задан'), '#88ff88');
 });
 
 registerCommand('save', 'Сохранить игру', () => {

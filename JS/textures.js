@@ -20,6 +20,15 @@ const TEXTURE_PATHS = {
   // Трава — оверлей поверх dirt
   grass:   TEX_BASE + 'grass.png',
 
+  // Природа
+  log:      TEX_BASE + 'log.png',
+  leaves:   TEX_BASE + 'leaves.png',
+  sapling:  TEX_BASE + 'sapling.png',
+
+  // Руды
+  coal_ore: TEX_BASE + 'coal_ore.png',
+  iron_ore: TEX_BASE + 'iron_ore.png',
+
   // Персонаж
   playerStand: TEX_BASE + 'player_stand.png',
   playerJump:  TEX_BASE + 'player_jump.png',

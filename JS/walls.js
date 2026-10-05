@@ -16,18 +16,16 @@ function generateWallChunk(cx, cy) {
     const row = [];
     const wy = cy * CHUNK_H + ly;
     for (let lx = 0; lx < CHUNK_W; lx++) {
+      const wx = cx * CHUNK_W + lx;
       let wall = WALL_AIR;
+
       if (cy === 0) {
-        // Трава и земля — земляная стена
-        if (wy >= SURFACE_ROW && wy <= SURFACE_ROW + 4) {
+        const surfaceY = getSurfaceHeight(wx);
+        if (wy >= surfaceY && wy <= surfaceY + 4) {
           wall = WALL_DIRT;
-        }
-        // Камень — каменная стена
-        else if (wy >= SURFACE_ROW + 5 && wy <= 38) {
+        } else if (wy > surfaceY + 4 && wy <= 38) {
           wall = WALL_STONE;
-        }
-        // Бедрок — стена бедрока
-        else if (wy === 39) {
+        } else if (wy === 39) {
           wall = WALL_BEDROCK;
         }
       } else if (cy > 0) {
