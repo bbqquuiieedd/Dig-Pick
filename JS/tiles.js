@@ -57,3 +57,41 @@ const WALL_DEFS = {
   [WALL_STONE]:   { texture: 'stone_wall', name: 'Каменная стена' },
   [WALL_BEDROCK]: { texture: 'bedrock_wall', name: 'Стена бедрока' },
 };
+
+// ------------------------------------------------------------
+// МАППИНГ ИМЁН — для консольных команд
+// ------------------------------------------------------------
+const TILE_NAME_TO_ID = {
+  'air':     TILE_AIR,
+  'dirt':    TILE_DIRT,
+  'grass':   TILE_GRASS,
+  'stone':   TILE_STONE,
+  'bedrock': TILE_BEDROCK,
+};
+
+const WALL_NAME_TO_ID = {
+  'air_wall':     WALL_AIR,
+  'dirt_wall':    WALL_DIRT,
+  'stone_wall':   WALL_STONE,
+  'bedrock_wall': WALL_BEDROCK,
+};
+
+// Возвращает { type: 'tile'|'wall', id } или null, если имя не найдено.
+// Регистр не важен: 'Stone' == 'stone'.
+function resolveBlockName(name) {
+  if (!name) return null;
+  const key = String(name).toLowerCase();
+
+  // Сначала проверяем стены (у них суффикс '_wall')
+  if (WALL_NAME_TO_ID[key] !== undefined) {
+    return { type: 'wall', id: WALL_NAME_TO_ID[key] };
+  }
+  if (TILE_NAME_TO_ID[key] !== undefined) {
+    return { type: 'tile', id: TILE_NAME_TO_ID[key] };
+  }
+  return null;
+}
+
+// Список имён для справки /help и автодополнения
+function listTileNames()  { return Object.keys(TILE_NAME_TO_ID);  }
+function listWallNames()  { return Object.keys(WALL_NAME_TO_ID);  }

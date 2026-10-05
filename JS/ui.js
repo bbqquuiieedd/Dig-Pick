@@ -611,7 +611,17 @@ function buildSettingsUI() {
   addToggle(colX, topY + rowH + 8, 320, rowH, 'Подсказки управления', settings.showHints,
     () => { settings.showHints = !settings.showHints; saveSettings(); });
 
-  const bindY0 = topY + (rowH + 8) * 2 + 20;
+  addCycle(colX, topY + (rowH + 8) * 2, 320, rowH, 'Чат на экране:',
+    (settings.chatDuration || 5) + ' сек',
+    () => {
+      const opts = [0, 3, 5, 10];
+      const cur = settings.chatDuration !== undefined ? settings.chatDuration : 5;
+      const idx = opts.indexOf(cur);
+      settings.chatDuration = opts[(idx + 1) % opts.length];
+      saveSettings();
+    });
+
+  const bindY0 = topY + (rowH + 8) * 3 + 20;
   ctx.fillStyle = '#ffd54a';
   ctx.font = '18px ' + FONT_FAMILY;
   ctx.textAlign = 'left';
@@ -864,6 +874,7 @@ function drawHintsOverlay() {
     `${getLbl('game','jump')} — прыжок`,
     `ЛКМ — копать, ПКМ — ставить`,
     `${getLbl('game','inventory')} — инвентарь`,
+    `${getLbl('game','chat')} — чат / консоль`,
     `${getLbl('game','pause')} — пауза`,
     `${getLbl('game','save')} — сохранить`,
     `${getLbl('game','hints')} — подсказки`,
@@ -871,7 +882,7 @@ function drawHintsOverlay() {
     `${getLbl('game','debug')} — отладка`,
   ];
   const padX = 10, padY = 8, lineH = 18;
-  const boxW = 240, boxH = lines.length * lineH + padY * 2;
+  const boxW = 280, boxH = lines.length * lineH + padY * 2;
   const boxX = 10, boxY = VIEW_HEIGHT - boxH - 10;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.fillRect(boxX, boxY, boxW, boxH);
@@ -891,5 +902,102 @@ function drawSaveIcon(now) {
   ctx.save();
   ctx.globalAlpha = 0.9;
   ctx.drawImage(tex, VIEW_WIDTH - 60, 40, 48, 48);
+  ctx.restore();
+}
+
+// ------------------------------------------------------------
+// КОНСОЛЬ — отрисовка
+// ------------------------------------------------------------
+function drawConsole() {
+  if (!consoleOpen) return;
+
+  const lineH = 18;
+  const inputH = 26;
+  const padding = 8;
+
+  // Верхняя панель — строка ввода
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(0, 0, VIEW_WIDTH, inputH + padding * 2);
+
+  ctx.font = '16px ' + FONT_FAMILY;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#88ff88';
+  ctx.fillText('>', padding, inputH / 2 + padding);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(consoleInput, padding + 20, inputH / 2 + padding);
+
+  // Мигающий курсор
+  const showCaret = Math.floor(performance.now() / 500) % 2 === 0;
+  if (showCaret) {
+    const tw = ctx.measureText(consoleInput).width;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(padding + 20 + tw + 1, padding + 4, 2, inputH - 8);
+  }
+
+  // Область вывода — под строкой ввода, до низа экрана
+  const logTop = inputH + padding * 2;
+  const logBottom = VIEW_HEIGHT - padding;
+  const maxLines = Math.floor((logBottom - logTop) / lineH);
+  const start = Math.max(0, consoleLog.length - maxLines);
+  const visible = consoleLog.slice(start);
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.fillRect(0, logTop, VIEW_WIDTH, logBottom - logTop);
+
+  ctx.textBaseline = 'top';
+  ctx.font = '14px ' + FONT_FAMILY;
+  for (let i = 0; i < visible.length; i++) {
+    ctx.fillStyle = visible[i].color;
+    ctx.fillText(visible[i].text, padding, logTop + i * lineH + 2);
+  }
+}
+
+// ------------------------------------------------------------
+// ЧАТ — оверлей поверх игры (после закрытия консоли)
+// ------------------------------------------------------------
+function drawChatOverlay() {
+  if (consoleOpen) return;
+
+  const now = performance.now();
+  if (now >= chatOverlayUntil) return;
+  if (chatMessages.length === 0) return;
+
+  // Плавное затухание в последнюю секунду
+  let alpha = 1;
+  const remaining = chatOverlayUntil - now;
+  if (remaining < 1000) alpha = remaining / 1000;
+
+  const padX = 10;
+  const padY = 8;
+  const lineH = 20;
+  const recent = chatMessages.slice(-5);
+  const boxH = recent.length * lineH + padY * 2;
+  const boxW = 420;
+  const boxY = VIEW_HEIGHT - boxH - 80;   // над хотбаром
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(padX, boxY, boxW, boxH);
+
+  ctx.font = '14px ' + FONT_FAMILY;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  for (let i = 0; i < recent.length; i++) {
+    const m = recent[i];
+    const nameStr = m.author + ': ';
+    const nameW = ctx.measureText(nameStr).width;
+
+    ctx.fillStyle = '#ffff88';
+    ctx.fillText(nameStr, padX + 8, boxY + padY + i * lineH);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(m.text, padX + 8 + nameW, boxY + padY + i * lineH);
+  }
+
   ctx.restore();
 }

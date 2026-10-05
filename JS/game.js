@@ -12,6 +12,11 @@
 //   - в главном меню → ничего
 // ------------------------------------------------------------
 function handleEscape() {
+  // Если открыта консоль — Esc закрывает её (это уже внутри consoleHandleKey),
+  // до handleEscape дело не дойдёт. Но на всякий случай:
+  if (consoleOpen) return;
+
+  // ... дальше как было
   const pauseCodes = settings.bindings.game.pause || ['Escape'];
   let escPressed = false;
   for (const code of pauseCodes) {
@@ -36,6 +41,8 @@ function handleEscape() {
 // а не в тике. Иначе при 2+ тиках за кадр действие сработает дважды.
 // ------------------------------------------------------------
 function handleGameHotkeys() {
+  if (consoleOpen) return;
+  // ... дальше как было
   if (gameState !== 'playing') return;
 
   // Инвентарь — toggle. Работает и на открытие, и на закрытие.
@@ -57,6 +64,7 @@ function handleGameHotkeys() {
 // ------------------------------------------------------------
 function updateTick() {
   if (gameState !== 'playing') return;
+  if (consoleOpen) return;
   if (inventoryOpen) return;
 
   updatePlayer();
@@ -95,9 +103,11 @@ function draw(now) {
     drawFpsOverlay();
     drawHintsOverlay();
     drawSaveIcon(now);
+    drawChatOverlay();
   }
 
   if (confirmDialog) drawConfirmDialog();
+  if (consoleOpen) drawConsole();
 }
 
 // ------------------------------------------------------------

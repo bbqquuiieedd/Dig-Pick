@@ -55,9 +55,14 @@ const PLAYER_WIDTH  = TILE_SIZE * 1.5;
 const PLAYER_HEIGHT = TILE_SIZE * 2.5;
 
 // --- Сохранения ---
-const SAVE_VERSION = "0.3";          // подняли версию — добавлены стены и новые поля
-const SAVE_KEY = "digpick_save";
-const SETTINGS_KEY = "digpick_settings";
+// Старая система (одно сохранение целиком) заменена на раздельные:
+// персонаж и мир лежат в разных ключах localStorage.
+const CHAR_VERSION  = '1';
+const WORLD_VERSION = '1';
+const CHAR_KEY_PREFIX  = 'digpick_char_';
+const WORLD_KEY_PREFIX = 'digpick_world_';
+const META_KEY         = 'digpick_meta';
+const SETTINGS_KEY     = 'digpick_settings';
 
 // --- Автосейв ---
 const AUTOSAVE_OPTIONS = [
@@ -145,6 +150,23 @@ let activeMenuButtonIndex = 0;
 const keys = {};
 const justPressedKeys = new Set();
 const mouse = { x: 0, y: 0, wx: 0, wy: 0, leftHeld: false };
+
+// Консоль
+let consoleOpen = false;
+let consoleLog = [];
+let consoleInput = '';
+let consoleHistory = [];
+let consoleHistoryIndex = -1;
+
+// Чат
+const CHAT_OVERLAY_DURATION = 5000;  // мс — сколько висит сообщение
+let chatMessages = [];        // [{ author, text, time }]
+let chatOverlayUntil = 0;     // timestamp, до которого показывается оверлей
+
+
+// Активные персонаж и мир (id из meta)
+let activeCharId  = null;
+let activeWorldId = null;
 
 // Кирка: анимация и искры
 let pickaxeAnimStart = 0;

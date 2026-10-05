@@ -8,6 +8,7 @@ const GAME_ACTIONS = [
   { id: 'jump',      label: 'Прыжок' },
   { id: 'inventory', label: 'Инвентарь' },
   { id: 'pause',     label: 'Пауза' },
+  { id: 'chat',      label: 'Чат / консоль' },
   { id: 'save',      label: 'Сохранить' },
   { id: 'hints',     label: 'Подсказки (F1)' },
   { id: 'fps',       label: 'FPS (F2)' },
@@ -25,6 +26,7 @@ function defaultSettings() {
     autosaveInterval: 60000,
     showFPS: false,
     showHints: false,
+    chatDuration: 5,          // секунды, 0 = не показывать
     bindings: {
       game: {
         left:      ['KeyA'],
@@ -32,6 +34,7 @@ function defaultSettings() {
         jump:      ['Space', 'KeyW'],
         inventory: ['KeyE', 'Tab', 'KeyI'],
         pause:     ['Escape'],
+        chat:      ['KeyT', 'Enter'],
         save:      ['F4'],
         hints:     ['F1'],
         fps:       ['F2'],
@@ -54,6 +57,8 @@ function saveSettings() {
 
 function loadSettings() {
   try {
+    settings.chatDuration = (typeof parsed.chatDuration === 'number')
+      ? parsed.chatDuration : def.chatDuration;
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);

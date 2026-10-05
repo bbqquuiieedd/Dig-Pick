@@ -6,6 +6,28 @@
 // КЛАВИАТУРА
 // ------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
+  // --- Консоль открыта: весь ввод идёт туда ---
+  if (consoleOpen) {
+    e.preventDefault();
+    consoleHandleKey(e);
+    return;
+  }
+
+  // --- Открытие консоли / чата ---
+  if (gameState === 'playing' && !inventoryOpen &&
+      settings.bindings.game.chat.includes(e.code)) {
+    openConsole();
+    e.preventDefault();
+    return;
+  }
+
+  // ... дальше как было
+  if (e.code === 'Tab' || e.code === 'Escape' ||
+      ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+
+  // ... и так далее
   // Жёстко предотвращаем браузерные действия для игровых клавиш.
   // Это фиксит баг с Tab: без preventDefault браузер уводит фокус,
   // и следующие нажатия (в т.ч. Esc) до нас не доходят.
@@ -65,6 +87,9 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
+  if (consoleOpen) return;   // при открытой консоли не трогаем игровые клавиши
+
+  // ... дальше как было
   keys[e.code] = false;
 
   // Если отпустили "главное" направление — переключаемся на то,
@@ -97,6 +122,9 @@ canvas.addEventListener('mousemove', updateMouseFromEvent);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 canvas.addEventListener('mousedown', (e) => {
+  if (consoleOpen) return;    // клики по миру игнорируем
+  // ... дальше как было
+
   updateMouseFromEvent(e);
 
   // Приоритет состояний
