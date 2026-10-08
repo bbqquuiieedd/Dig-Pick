@@ -11,17 +11,34 @@ function toggleInventory() {
   }
 }
 
+// Старая функция для блоков (совместимость)
 function tryAddToInventory(tileId) {
-  for (let i = 0; i < slots.length; i++) {
-    const s = slots[i];
-    if (s && s.tileId === tileId && s.count < MAX_STACK) {
-      s.count++; hasUnsavedChanges = true; return true;
+  return tryAddItemToInventory(tileId, 1);
+}
+
+// Универсальная функция — принимает любой id (блок или предмет)
+function tryAddItemToInventory(itemId, count) {
+  count = count || 1;
+  for (let n = 0; n < count; n++) {
+    let placed = false;
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (s && s.tileId === itemId && s.count < MAX_STACK) {
+        s.count++; placed = true; break;
+      }
     }
+    if (placed) continue;
+    for (let i = 0; i < slots.length; i++) {
+      if (!slots[i]) {
+        slots[i] = { tileId: itemId, count: 1 };
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) return false;
   }
-  for (let i = 0; i < slots.length; i++) {
-    if (!slots[i]) { slots[i] = { tileId, count: 1 }; hasUnsavedChanges = true; return true; }
-  }
-  return false;
+  hasUnsavedChanges = true;
+  return true;
 }
 
 function handleSlotClick(slot, button) {
@@ -44,8 +61,8 @@ function handleSlotClick(slot, button) {
 function getInventoryPanelRect() {
   const width  = INVENTORY_COLS * SLOT_STEP - SLOT_GAP;
   const height = INVENTORY_ROWS * SLOT_STEP - SLOT_GAP;
-  const x = (VIEW_WIDTH - width) / 2;
-  const y = VIEW_HEIGHT - height - 20;
+  const x = (UI_W - width) / 2;
+  const y = UI_H - height - 20;
   return { x, y, width, height };
 }
 
@@ -78,6 +95,23 @@ function getSlotAt(mx, my) {
   return slotRow * INVENTORY_COLS + col;
 }
 
+// Получить определение для отрисовки — блок или предмет
+function getItemDef(itemId) {
+  if (itemId < 0) return ITEM_DEFS[itemId];
+  return TILE_DEFS[itemId];
+}
+
+function drawItemIcon(itemId, x, y, size) {
+  const def = getItemDef(itemId);
+  if (!def) return;
+  if (itemId === TILE_GRASS) {
+    drawTexture('dirt', x, y, size, size);
+    drawTexture('grass', x, y, size, size);
+  } else if (def.texture) {
+    drawTexture(def.texture, x, y, size, size);
+  }
+}
+
 function drawSlot(slotIndex, isActive) {
   const r = getSlotRect(slotIndex);
   ctx.fillStyle = 'rgba(20, 20, 25, 0.78)';
@@ -88,20 +122,15 @@ function drawSlot(slotIndex, isActive) {
 
   const item = slots[slotIndex];
   if (item) {
-    const def = TILE_DEFS[item.tileId];
-    if (def) {
-      if (item.tileId === TILE_GRASS) {
-        drawTexture('dirt', r.x + 5, r.y + 5, SLOT_SIZE - 10, SLOT_SIZE - 10);
-        drawTexture('grass', r.x + 5, r.y + 5, SLOT_SIZE - 10, SLOT_SIZE - 10);
-      } else if (def.texture) {
-        drawTexture(def.texture, r.x + 5, r.y + 5, SLOT_SIZE - 10, SLOT_SIZE - 10);
-      }
-    }
+    drawItemIcon(item.tileId, r.x + 5, r.y + 5, SLOT_SIZE - 10);
     if (item.count > 1) {
       ctx.font = '12px ' + FONT_FAMILY;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-      ctx.fillStyle = '#000'; ctx.fillText(item.count.toString(), r.x + r.w - 3, r.y + r.h - 1);
-      ctx.fillStyle = '#fff'; ctx.fillText(item.count.toString(), r.x + r.w - 4, r.y + r.h - 2);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = '#000';
+      ctx.fillText(item.count.toString(), r.x + r.w - 3, r.y + r.h - 1);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(item.count.toString(), r.x + r.w - 4, r.y + r.h - 2);
     }
   }
 }
@@ -114,20 +143,18 @@ function drawInventoryUI() {
 
 function drawDraggingItem() {
   if (!dragging) return;
-  const def = TILE_DEFS[dragging.tileId];
-  if (!def) return;
   const iconSize = SLOT_SIZE - 10;
-  const ix = mouse.x - iconSize / 2;
-  const iy = mouse.y - iconSize / 2;
-  if (dragging.tileId === TILE_GRASS) {
-    drawTexture('dirt', ix, iy, iconSize, iconSize);
-    drawTexture('grass', ix, iy, iconSize, iconSize);
-  } else if (def.texture) drawTexture(def.texture, ix, iy, iconSize, iconSize);
+  const ix = mouse.ux - iconSize / 2;
+  const iy = mouse.uy - iconSize / 2;
+  drawItemIcon(dragging.tileId, ix, iy, iconSize);
 
   if (dragging.count > 1) {
     ctx.font = '12px ' + FONT_FAMILY;
-    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillStyle = '#000'; ctx.fillText(dragging.count.toString(), mouse.x + iconSize/2, mouse.y + iconSize/2);
-    ctx.fillStyle = '#fff'; ctx.fillText(dragging.count.toString(), mouse.x + iconSize/2 - 1, mouse.y + iconSize/2 - 1);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#000';
+    ctx.fillText(dragging.count.toString(), mouse.ux + iconSize/2, mouse.uy + iconSize/2);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(dragging.count.toString(), mouse.ux + iconSize/2 - 1, mouse.uy + iconSize/2 - 1);
   }
 }

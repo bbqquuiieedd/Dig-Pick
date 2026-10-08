@@ -197,7 +197,7 @@ registerCommand('give', 'Выдать блок. /give <имя> [кол-во]', (
   logConsole('Выдано: ' + TILE_DEFS[resolved.id].name + ' x' + count, '#88ff88');
 });
 
-registerCommand('tp', 'Телепорт. /tp <x> <y> (в блоках)', (args) => {
+registerCommand('tp', 'Телепорт. /tp <x> <y> (Y: 0=трава, +=вверх, -=вниз)', (args) => {
   const x = parseInt(args[0], 10);
   const y = parseInt(args[1], 10);
   if (isNaN(x) || isNaN(y)) { logConsole('Использование: /tp <x> <y>', '#ff8888'); return; }
@@ -208,23 +208,13 @@ registerCommand('tp', 'Телепорт. /tp <x> <y> (в блоках)', (args) 
   logConsole('Телепорт в (' + x + ', ' + y + ')', '#88ff88');
 });
 
-registerCommand('setblock', 'Поставить блок/стену. /setblock <x> <y> <имя>', (args) => {
-  if (args.length < 3) {
-    logConsole('Использование: /setblock <x> <y> <имя>', '#ff8888');
-    logConsole('Пример: /setblock 5 10 stone', '#888888');
-    return;
-  }
+registerCommand('setblock', 'Поставить блок. /setblock <x> <y> <имя>', (args) => {
+  if (args.length < 3) { logConsole('Использование: /setblock <x> <y> <имя>', '#ff8888'); return; }
   const x = parseInt(args[0], 10);
   const y = parseInt(args[1], 10);
-  if (isNaN(x) || isNaN(y)) { logConsole('x и y должны быть числами', '#ff8888'); return; }
-
+  if (isNaN(x) || isNaN(y)) { logConsole('x и y — числа', '#ff8888'); return; }
   const resolved = resolveBlockName(args[2]);
-  if (!resolved) {
-    logConsole('Нет такого блока: ' + args[2], '#ff8888');
-    logConsole('Список: /help', '#888888');
-    return;
-  }
-
+  if (!resolved) { logConsole('Нет блока: ' + args[2], '#ff8888'); return; }
   if (resolved.type === 'tile') {
     setTile(x, y, resolved.id);
     logConsole('Блок ' + TILE_DEFS[resolved.id].name + ' в (' + x + ', ' + y + ')', '#88ff88');
@@ -235,24 +225,14 @@ registerCommand('setblock', 'Поставить блок/стену. /setblock <
 });
 
 registerCommand('fill', 'Заполнить область. /fill <x1> <y1> <x2> <y2> <имя>', (args) => {
-  if (args.length < 5) {
-    logConsole('Использование: /fill <x1> <y1> <x2> <y2> <имя>', '#ff8888');
-    logConsole('Пример: /fill 0 20 20 25 stone', '#888888');
-    return;
-  }
+  if (args.length < 5) { logConsole('Использование: /fill <x1> <y1> <x2> <y2> <имя>', '#ff8888'); return; }
   const x1 = parseInt(args[0], 10);
   const y1 = parseInt(args[1], 10);
   const x2 = parseInt(args[2], 10);
   const y2 = parseInt(args[3], 10);
-  if ([x1,y1,x2,y2].some(isNaN)) { logConsole('Координаты должны быть числами', '#ff8888'); return; }
-
+  if ([x1,y1,x2,y2].some(isNaN)) { logConsole('Координаты — числа', '#ff8888'); return; }
   const resolved = resolveBlockName(args[4]);
-  if (!resolved) {
-    logConsole('Нет такого блока: ' + args[4], '#ff8888');
-    logConsole('Список: /help', '#888888');
-    return;
-  }
-
+  if (!resolved) { logConsole('Нет блока: ' + args[4], '#ff8888'); return; }
   const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
   const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
   let count = 0;
@@ -265,6 +245,23 @@ registerCommand('fill', 'Заполнить область. /fill <x1> <y1> <x2>
     }
   }
   logConsole('Заполнено: ' + count, '#88ff88');
+});
+
+registerCommand('water', 'Налить воду. /water <x> <y> [кол-во]', (args) => {
+  const x = parseInt(args[0], 10);
+  const y = parseInt(args[1], 10);
+  const amount = args[2] ? parseInt(args[2], 10) : WATER_MAX_LEVEL;
+  if (isNaN(x) || isNaN(y)) { logConsole('Использование: /water <x> <y> [кол-во]', '#ff8888'); return; }
+  addWater(x, y, amount);
+  logConsole('Налито воды: ' + amount + ' в (' + x + ', ' + y + ')', '#88ff88');
+});
+
+registerCommand('drain', 'Убрать воду. /drain <x> <y>', (args) => {
+  const x = parseInt(args[0], 10);
+  const y = parseInt(args[1], 10);
+  if (isNaN(x) || isNaN(y)) { logConsole('Использование: /drain <x> <y>', '#ff8888'); return; }
+  setWater(x, y, 0);
+  logConsole('Вода убрана', '#88ff88');
 });
 
 registerCommand('clear', 'Очистить инвентарь', () => {
@@ -316,4 +313,15 @@ registerCommand('me', 'Отправить сообщение в чат. /me <т�
   const author = getActiveCharacterName();
   addChatMessage(author, text);
   logConsole(author + ': ' + text, '#ffffff');
+});
+
+// ============================================================
+// КОМАНДА: РЫБА
+// ============================================================
+
+registerCommand('fish', 'Заспавнить лосося рядом с игроком', () => {
+  const pcx = Math.floor((player.x + player.width / 2) / TILE_SIZE);
+  const pcy = Math.floor((player.y + player.height / 2) / TILE_SIZE);
+  spawnFishAt(pcx * TILE_SIZE, pcy * TILE_SIZE);
+  logConsole('Лосось заспавнен', '#88ff88');
 });

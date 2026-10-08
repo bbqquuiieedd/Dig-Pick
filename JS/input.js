@@ -2,18 +2,15 @@
 //  input.js — клавиатура, мышь, свой курсор
 // ============================================================
 
-// ------------------------------------------------------------
-// КЛАВИАТУРА
-// ------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
-  // --- Консоль открыта: весь ввод идёт туда ---
+  // Консоль открыта — весь ввод идёт туда
   if (consoleOpen) {
     e.preventDefault();
     consoleHandleKey(e);
     return;
   }
 
-  // --- Открытие консоли / чата ---
+  // Открытие консоли / чата
   if (gameState === 'playing' && !inventoryOpen &&
       settings.bindings.game.chat.includes(e.code)) {
     openConsole();
@@ -21,24 +18,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // ... дальше как было
-  if (e.code === 'Tab' || e.code === 'Escape' ||
-      ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
-    e.preventDefault();
-  }
-
-  // ... и так далее
-  // Жёстко предотвращаем браузерные действия для игровых клавиш.
-  // Это фиксит баг с Tab: без preventDefault браузер уводит фокус,
-  // и следующие нажатия (в т.ч. Esc) до нас не доходят.
-  // Перехватываем все клавиши, которые браузер может использовать по умолчанию.
-  // F11 и F12 не перехватываются — это ограничение браузера.
+  // Перехват служебных клавиш — чтобы браузер их не использовал
   const PREVENT_DEFAULT_CODES = [
     'Tab', 'Escape',
     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     'Space',
     'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10',
-    'Backspace', '/', "'",
   ];
   if (PREVENT_DEFAULT_CODES.includes(e.code)) {
     e.preventDefault();
@@ -48,7 +33,6 @@ window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (!wasPressed) justPressedKeys.add(e.code);
 
-  // Если ждём клавишу для переназначения
   if (waitingForKey) {
     e.preventDefault();
     if (e.code === 'Escape') { waitingForKey = null; return; }
@@ -57,7 +41,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Глобальные хоткеи: F1, F2, F3
   if (!wasPressed) {
     if (settings.bindings.game.hints.includes(e.code)) {
       settings.showHints = !settings.showHints;
@@ -69,14 +52,12 @@ window.addEventListener('keydown', (e) => {
       saveSettings();
       return;
     }
-        if (settings.bindings.game.debug.includes(e.code)) {
+    if (settings.bindings.game.debug.includes(e.code)) {
       debugOverlay = !debugOverlay;
       return;
     }
   }
 
-  // Приоритет последней нажатой клавиши направления.
-  // Только в игре, без открытого инвентаря/модалки.
   if (gameState === 'playing' && !inventoryOpen && !confirmDialog) {
     if (!wasPressed) {
       const actionId = getActionForKey('game', e.code);
@@ -87,13 +68,9 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
-  if (consoleOpen) return;   // при открытой консоли не трогаем игровые клавиши
-
-  // ... дальше как было
+  if (consoleOpen) return;
   keys[e.code] = false;
 
-  // Если отпустили "главное" направление — переключаемся на то,
-  // которое ещё зажато (если есть). Иначе сбрасываем в null.
   if (gameState === 'playing' && !inventoryOpen && !confirmDialog) {
     const actionId = getActionForKey('game', e.code);
     if (actionId === 'left' && lastDirectionAction === 'left') {
@@ -109,62 +86,63 @@ window.addEventListener('keyup', (e) => {
 
 // ------------------------------------------------------------
 // МЫШЬ
+// mouse.x/y  — экранные CSS-пиксели
+// mouse.ux/uy — UI-координаты (компенсация зума, для кликов по UI)
+// mouse.wx/wy — мировые, Y-ВВЕРХ
 // ------------------------------------------------------------
 function updateMouseFromEvent(e) {
   const rect = canvas.getBoundingClientRect();
   mouse.x = e.clientX - rect.left;
   mouse.y = e.clientY - rect.top;
-  mouse.wx = mouse.x / RENDER_SCALE;
-  mouse.wy = mouse.y / RENDER_SCALE;
+
+  // UI-координаты — умножаем на UI_ZOOM, потому что UI отрисовывается
+  // с ctx.scale(1/UI_ZOOM). Тогда клики попадают точно по элементам.
+  mouse.ux = mouse.x * UI_ZOOM;
+  mouse.uy = mouse.y * UI_ZOOM;
+
+  // Мир
+  mouse.wx = camera.x + mouse.x / RENDER_SCALE;
+  const cameraTop = camera.y + VIEW_WORLD_HEIGHT;
+  mouse.wy = cameraTop - mouse.y / RENDER_SCALE;
 }
 
 canvas.addEventListener('mousemove', updateMouseFromEvent);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 canvas.addEventListener('mousedown', (e) => {
-  if (consoleOpen) return;    // клики по миру игнорируем
-  // ... дальше как было
-
+  if (consoleOpen) return;
   updateMouseFromEvent(e);
 
-  // Приоритет состояний
-  if (confirmDialog) {
-    handleConfirmDialogClick(e.button);
-    e.preventDefault();
-    return;
-  }
-  if (gameState === 'settings') {
-    handleSettingsClick(e.button);
-    e.preventDefault();
-    return;
-  }
-  if (gameState === 'main_menu') {
-    handleMainMenuClick(e.button);
-    e.preventDefault();
-    return;
-  }
-  if (gameState === 'paused') {
-    handlePauseMenuClick(e.button);
-    e.preventDefault();
-    return;
-  }
+  if (confirmDialog) { handleConfirmDialogClick(e.button); e.preventDefault(); return; }
+  if (gameState === 'settings')  { handleSettingsClick(e.button); e.preventDefault(); return; }
+  if (gameState === 'main_menu') { handleMainMenuClick(e.button); e.preventDefault(); return; }
+  if (gameState === 'paused')    { handlePauseMenuClick(e.button); e.preventDefault(); return; }
 
-  // Игра
   if (gameState === 'playing') {
     if (inventoryOpen) {
-      const slot = getSlotAt(mouse.x, mouse.y);
+      const slot = getSlotAt(mouse.ux, mouse.uy);
       if (slot >= 0) handleSlotClick(slot, e.button);
       e.preventDefault();
       return;
     }
-    const hotbarSlot = getSlotAt(mouse.x, mouse.y);
+    const hotbarSlot = getSlotAt(mouse.ux, mouse.uy);
     if (hotbarSlot >= 0 && hotbarSlot < HOTBAR_SLOTS) {
       if (e.button === 0) activeSlot = hotbarSlot;
       e.preventDefault();
       return;
     }
-    if (e.button === 0) mouse.leftHeld = true;
-    else if (e.button === 2) tryPlaceBlock();
+    if (e.button === 0) {
+      mouse.leftHeld = true;
+    } else if (e.button === 2) {
+      const item = slots[activeSlot];
+      if (!item) {
+        handleEmptyRightClick();
+      } else if (item.tileId < 0) {
+        handleEmptyRightClick();
+      } else {
+        tryPlaceBlock();
+      }
+    }
     e.preventDefault();
   }
 });
@@ -173,27 +151,59 @@ window.addEventListener('mouseup', (e) => {
   if (e.button === 0) mouse.leftHeld = false;
 });
 
-// Колесо мыши — переключение активного слота хотбара
 canvas.addEventListener('wheel', (e) => {
-  if (gameState !== 'playing' || inventoryOpen) return;
+  if (gameState !== 'playing' || inventoryOpen || consoleOpen) return;
   const delta = e.deltaY > 0 ? 1 : -1;
   activeSlot = (activeSlot + delta + HOTBAR_SLOTS) % HOTBAR_SLOTS;
   e.preventDefault();
 }, { passive: false });
 
 // ------------------------------------------------------------
-// СВОЙ КУРСОР (двигается за мышью через <img>)
+// СВОЙ КУРСОР
+// Храним ФИЗИЧЕСКУЮ позицию мыши (clientX * dpr).
+// При зуме dpr меняется, но физическая позиция — нет.
+// Поэтому при resize пересчитываем CSS-позицию из физической.
 // ------------------------------------------------------------
-// Двигаем курсор и всегда показываем его при движении мыши
+const CURSOR_HOTSPOT_NATIVE_X = 2;   // hotspot в нативных пикселях картинки
+const CURSOR_HOTSPOT_NATIVE_Y = 2;
+
+// Физическая позиция мыши (в физических пикселях окна)
+let cursorPhysX = -1000;
+let cursorPhysY = -1000;
+
+function getCursorCssSize() {
+  return CURSOR_BASE_SIZE / UI_ZOOM;
+}
+
+function applyCursorPosition() {
+  if (cursorPhysX < -900) return;   // ещё ни разу не двигали мышь
+
+  const dpr = window.devicePixelRatio || 1;
+
+  // Физическую → CSS
+  const clientX = cursorPhysX / dpr;
+  const clientY = cursorPhysY / dpr;
+
+  // Hotspot в CSS-пикселях
+  const cssSize = getCursorCssSize();
+  const natW = cursorEl.naturalWidth  || 8;
+  const natH = cursorEl.naturalHeight || 8;
+  const offsetX = CURSOR_HOTSPOT_NATIVE_X * (cssSize / natW);
+  const offsetY = CURSOR_HOTSPOT_NATIVE_Y * (cssSize / natH);
+
+  cursorEl.style.left = (clientX - offsetX) + 'px';
+  cursorEl.style.top  = (clientY - offsetY) + 'px';
+}
+
 window.addEventListener('mousemove', (e) => {
   if (cursorEl.style.opacity !== '1') cursorEl.style.opacity = '1';
-  cursorEl.style.left = (e.clientX - 2) + 'px';
-  cursorEl.style.top  = (e.clientY - 2) + 'px';
+
+  const dpr = window.devicePixelRatio || 1;
+  cursorPhysX = e.clientX * dpr;
+  cursorPhysY = e.clientY * dpr;
+  applyCursorPosition();
 });
 
-// Прячем курсор, когда мышь уходит за пределы страницы
 document.addEventListener('mouseleave', () => { cursorEl.style.opacity = '0'; });
 document.addEventListener('mouseenter', () => { cursorEl.style.opacity = '1'; });
-
-// Прячем при потере фокуса окном
 window.addEventListener('blur',  () => { cursorEl.style.opacity = '0'; });

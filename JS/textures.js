@@ -12,18 +12,18 @@ const TEXTURE_PATHS = {
   stone:   TEX_BASE + 'stone.png',
   bedrock: TEX_BASE + 'bedrock.png',
 
-  // Стены (задний фон)
+  // Стены
   dirt_wall:    TEX_BASE + 'dirt_wall.png',
   stone_wall:   TEX_BASE + 'stone_wall.png',
   bedrock_wall: TEX_BASE + 'bedrock_wall.png',
 
-  // Трава — оверлей поверх dirt
+  // Трава
   grass:   TEX_BASE + 'grass.png',
 
   // Природа
-  log:      TEX_BASE + 'log.png',
-  leaves:   TEX_BASE + 'leaves.png',
-  sapling:  TEX_BASE + 'sapling.png',
+  log:     TEX_BASE + 'log.png',
+  leaves:  TEX_BASE + 'leaves.png',
+  sapling: TEX_BASE + 'sapling.png',
 
   // Руды
   coal_ore: TEX_BASE + 'coal_ore.png',
@@ -37,6 +37,15 @@ const TEXTURE_PATHS = {
   // Кирка и искры
   pickaxeIron: TEX_BASE + 'pickaxe_iron.png',
   spark:       TEX_BASE + 'spark.png',
+
+  // Вода
+  water:       TEX_BASE + 'water.png',
+
+  // Сущности
+  salmon:      TEX_BASE + 'salmon.png',
+
+  // Предметы
+  salmon_raw:  TEX_BASE + 'salmon_raw.png',
 
   // Прочее
   frame:        TEX_BASE + 'frame.png',
@@ -106,14 +115,17 @@ function drawTextureFlipped(name, x, y, w, h, flip) {
 }
 
 function drawBackgroundCover(name) {
+  const W = UI_W;
+  const H = UI_H;
+
   const tex = textures[name];
   if (!tex || !tex.complete || tex.naturalWidth === 0) {
     ctx.fillStyle = '#2a2a35';
-    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    ctx.fillRect(0, 0, W, H);
     return;
   }
   const imgW = tex.naturalWidth, imgH = tex.naturalHeight;
-  const scale = Math.max(VIEW_WIDTH / imgW, VIEW_HEIGHT / imgH);
+  const scale = Math.max(W / imgW, H / imgH);
   const dw = imgW * scale, dh = imgH * scale;
-  ctx.drawImage(tex, (VIEW_WIDTH - dw) / 2, (VIEW_HEIGHT - dh) / 2, dw, dh);
+  ctx.drawImage(tex, (W - dw) / 2, (H - dh) / 2, dw, dh);
 }

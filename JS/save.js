@@ -2,9 +2,6 @@
 //  save.js — раздельные сохранения персонажа и мира
 // ============================================================
 
-// ------------------------------------------------------------
-// META
-// ------------------------------------------------------------
 function loadMeta() {
   try {
     const raw = localStorage.getItem(META_KEY);
@@ -28,9 +25,6 @@ function saveMeta(meta) {
 function getCharacterKey(id) { return CHAR_KEY_PREFIX + id; }
 function getWorldKey(id)     { return WORLD_KEY_PREFIX + id; }
 
-// ------------------------------------------------------------
-// СПИСКИ
-// ------------------------------------------------------------
 function listCharacters() {
   return loadMeta().characters.map(c => ({ id: c.id, name: c.name }));
 }
@@ -38,9 +32,6 @@ function listWorlds() {
   return loadMeta().worlds.map(w => ({ id: w.id, name: w.name, seed: w.seed }));
 }
 
-// ------------------------------------------------------------
-// СОЗДАНИЕ
-// ------------------------------------------------------------
 function createCharacter(name) {
   const id = 'c_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
   const meta = loadMeta();
@@ -58,6 +49,8 @@ function createCharacter(name) {
     tutorialDone: false,
     lastWorldId: null,
     worldPositions: {},
+    playerHP: HP_MAX,
+    playerAir: AIR_MAX,
   };
   localStorage.setItem(getCharacterKey(id), JSON.stringify(char));
   return id;
@@ -81,16 +74,14 @@ function createWorld(name, seed) {
     savedAtDisplay: formatSavedAt(Date.now()),
     chunks: {},
     wallChunks: {},
-    spawn: { x: 0, y: SURFACE_ROW * TILE_SIZE - PLAYER_HEIGHT },
+    water: {},
+    spawn: { x: 0, y: SURFACE_Y * TILE_SIZE },
     time: 0,
   };
   localStorage.setItem(getWorldKey(id), JSON.stringify(world));
   return id;
 }
 
-// ------------------------------------------------------------
-// УДАЛЕНИЕ
-// ------------------------------------------------------------
 function deleteCharacter(id) {
   const meta = loadMeta();
   meta.characters = meta.characters.filter(c => c.id !== id);
@@ -107,8 +98,6 @@ function deleteWorld(id) {
   localStorage.removeItem(getWorldKey(id));
 }
 
-// Удаляет активную пару (персонаж + мир) и сбрасывает meta.
-// Вызывается из главного меню по кнопке "×".
 function deleteSave() {
   const meta = loadMeta();
   if (meta.activeChar)  deleteCharacter(meta.activeChar);
@@ -124,9 +113,6 @@ function deleteSave() {
   activeWorldSeed = null;
 }
 
-// ------------------------------------------------------------
-// ЗАГРУЗКА
-// ------------------------------------------------------------
 function loadCharacter(id) {
   try {
     const raw = localStorage.getItem(getCharacterKey(id));
@@ -143,9 +129,6 @@ function loadWorld(id) {
   } catch (e) { return null; }
 }
 
-// ------------------------------------------------------------
-// СЕРИАЛИЗАЦИЯ
-// ------------------------------------------------------------
 function serializeChunks() {
   const out = {};
   for (const [key, data] of chunks.entries()) out[key] = data;
@@ -172,9 +155,6 @@ function formatSavedAt(ts) {
   return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// ------------------------------------------------------------
-// СОХРАНИТЬ ПЕРСОНАЖА
-// ------------------------------------------------------------
 function saveCharacter() {
   if (!activeCharId) return false;
   const char = loadCharacter(activeCharId);
@@ -187,6 +167,8 @@ function saveCharacter() {
     char.worldPositions[activeWorldId] = { x: player.x, y: player.y };
   }
   char.lastWorldId = activeWorldId;
+  char.playerHP  = playerHP;
+  char.playerAir = playerAir;
 
   try {
     localStorage.setItem(getCharacterKey(activeCharId), JSON.stringify(char));
@@ -194,9 +176,6 @@ function saveCharacter() {
   } catch (e) { return false; }
 }
 
-// ------------------------------------------------------------
-// СОХРАНИТЬ МИР
-// ------------------------------------------------------------
 function saveWorld() {
   if (!activeWorldId) return false;
   const world = loadWorld(activeWorldId);
@@ -204,6 +183,7 @@ function saveWorld() {
 
   world.chunks     = serializeChunks();
   world.wallChunks = serializeWallChunks();
+  world.water      = serializeWater();
   world.spawn      = { x: spawnPoint.x, y: spawnPoint.y };
   world.savedAt    = Date.now();
   world.savedAtDisplay = formatSavedAt(Date.now());
@@ -214,9 +194,6 @@ function saveWorld() {
   } catch (e) { return false; }
 }
 
-// ------------------------------------------------------------
-// ОБЩЕЕ СОХРАНЕНИЕ
-// ------------------------------------------------------------
 function saveGame() {
   const ok1 = saveCharacter();
   const ok2 = saveWorld();
@@ -228,19 +205,24 @@ function saveGame() {
   return false;
 }
 
-// ------------------------------------------------------------
-// ЗАГРУЗИТЬ АКТИВНУЮ ПАРУ
-// ------------------------------------------------------------
 function loadGame() {
   if (!activeCharId || !activeWorldId) return false;
   const char  = loadCharacter(activeCharId);
   const world = loadWorld(activeWorldId);
   if (!char || !world) return false;
 
+  // Проверка версии мира — если старая, сбрасываем.
+  // Старые миры в другой системе координат, загружать их нельзя.
+  if (world.version !== WORLD_VERSION) {
+    console.warn('Мир сохранён в несовместимой версии, создаём новый');
+    return false;
+  }
+
   activeWorldSeed = seedToNumber(world.seed);
 
   deserializeChunks(world.chunks || {});
   deserializeWallChunks(world.wallChunks || {});
+  deserializeWater(world.water || {});
   if (world.spawn) {
     spawnPoint.x = world.spawn.x;
     spawnPoint.y = world.spawn.y;
@@ -262,13 +244,13 @@ function loadGame() {
   }
   activeSlot = char.activeSlot || 0;
 
+  playerHP  = typeof char.playerHP === 'number' ? char.playerHP : HP_MAX;
+  playerAir = typeof char.playerAir === 'number' ? char.playerAir : AIR_MAX;
+
   hasUnsavedChanges = false;
   return true;
 }
 
-// ------------------------------------------------------------
-// ИНФО ДЛЯ ГЛАВНОГО МЕНЮ
-// ------------------------------------------------------------
 function getSaveInfo() {
   const meta = loadMeta();
   if (!meta.activeChar || !meta.activeWorld) return null;
@@ -283,9 +265,6 @@ function getActiveCharacterName() {
   return char && char.name ? char.name : 'Игрок';
 }
 
-// ------------------------------------------------------------
-// СТАРТ НОВОЙ ИГРЫ
-// ------------------------------------------------------------
 function startNewGame() {
   const meta = loadMeta();
 
@@ -309,6 +288,8 @@ function startNewGame() {
   activeWorldSeed = worldData ? seedToNumber(worldData.seed) : DEFAULT_SEED;
 
   clearWorld();
+  clearWater();
+  clearFish();
   resetPlayer();
   for (let i = 0; i < INVENTORY_SLOTS; i++) slots[i] = null;
   activeSlot = 0;
@@ -323,15 +304,13 @@ function startNewGame() {
   lastAutosaveTime = performance.now();
 }
 
-// ------------------------------------------------------------
-// ПРОДОЛЖИТЬ
-// ------------------------------------------------------------
 function continueGame() {
   const meta = loadMeta();
   if (!meta.activeChar || !meta.activeWorld) { startNewGame(); return; }
   activeCharId = meta.activeChar;
   activeWorldId = meta.activeWorld;
 
+  clearFish();
   if (!loadGame()) { startNewGame(); return; }
 
   breakingBlock = null; breakingProgress = 0;

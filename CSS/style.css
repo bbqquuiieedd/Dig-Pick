@@ -14,30 +14,34 @@
 }
 
 html, body {
-  cursor: none;
-}
-
-body {
-  background: #1a1a1a;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
+  background: #87CEEB;   /* цвет неба — на случай любой щели */
+  cursor: none;
 }
 
 canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
   display: block;
   width: 100vw;
   height: 100vh;
-  image-rendering: pixelated;
+  /* image-rendering: pixelated УБРАН — он даёт цветные полосы при зуме.
+     Внутри canvas сглаживание контролируется через imageSmoothingEnabled=false */
   cursor: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 #cursor {
   position: fixed;
   left: -100px;
   top: -100px;
-  width: 32px;
-  height: 32px;
   pointer-events: none;
-  image-rendering: pixelated;
+  image-rendering: pixelated;   /* только для курсора — можно */
   z-index: 9999;
   user-select: none;
   cursor: none;

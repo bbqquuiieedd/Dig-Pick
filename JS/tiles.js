@@ -1,5 +1,5 @@
 // ============================================================
-//  tiles.js — определения блоков и стен
+//  tiles.js — определения блоков, стен и предметов
 // ============================================================
 
 // ------------------------------------------------------------
@@ -10,12 +10,12 @@ const TILE_DIRT         = 1;
 const TILE_GRASS        = 2;
 const TILE_STONE        = 3;
 const TILE_BEDROCK      = 4;
-const TILE_LOG          = 5;   // обычное бревно (с коллизией, ставится игроком)
+const TILE_LOG          = 5;
 const TILE_LEAVES       = 6;
 const TILE_SAPLING      = 7;
 const TILE_COAL         = 8;
 const TILE_IRON         = 9;
-const TILE_LOG_NATURAL  = 10;  // бревно дерева (без коллизии, ставится генератором)
+const TILE_LOG_NATURAL  = 10;
 
 const TILE_DEFS = {
   [TILE_AIR]: {
@@ -58,8 +58,6 @@ const TILE_DEFS = {
     solid: true, breakable: true, texture: 'iron_ore', name: 'Железная руда',
     hardness: 1.60, tool: 'pickaxe', drop: TILE_IRON, dropChance: 1,
   },
-  // Природное бревно — то, что генерируется как часть дерева.
-  // Без коллизии, но дропает обычное TILE_LOG.
   [TILE_LOG_NATURAL]: {
     solid: false, breakable: true, texture: 'log', name: 'Бревно (природное)',
     hardness: 0.50, tool: 'axe', drop: TILE_LOG, dropChance: 1,
@@ -82,7 +80,20 @@ const WALL_DEFS = {
 };
 
 // ------------------------------------------------------------
-// МАППИНГ ИМЁН — для консольных команд
+// ПРЕДМЕТЫ (не блоки) — отрицательные id
+// ------------------------------------------------------------
+const ITEM_RAW_SALMON = -1;
+
+const ITEM_DEFS = {
+  [ITEM_RAW_SALMON]: {
+    name: 'Сырой лосось',
+    texture: 'salmon_raw',
+    stackable: true,
+  },
+};
+
+// ------------------------------------------------------------
+// МАППИНГ ИМЁН
 // ------------------------------------------------------------
 const TILE_NAME_TO_ID = {
   'air':          TILE_AIR,
@@ -105,6 +116,10 @@ const WALL_NAME_TO_ID = {
   'bedrock_wall': WALL_BEDROCK,
 };
 
+const ITEM_NAME_TO_ID = {
+  'salmon': ITEM_RAW_SALMON,
+};
+
 function resolveBlockName(name) {
   if (!name) return null;
   const key = String(name).toLowerCase();
@@ -113,5 +128,13 @@ function resolveBlockName(name) {
   return null;
 }
 
-function listTileNames() { return Object.keys(TILE_NAME_TO_ID); }
-function listWallNames() { return Object.keys(WALL_NAME_TO_ID); }
+function resolveItemName(name) {
+  if (!name) return null;
+  const key = String(name).toLowerCase();
+  if (ITEM_NAME_TO_ID[key] !== undefined) return ITEM_NAME_TO_ID[key];
+  return null;
+}
+
+function listTileNames()  { return Object.keys(TILE_NAME_TO_ID);  }
+function listWallNames()  { return Object.keys(WALL_NAME_TO_ID);  }
+function listItemNames()  { return Object.keys(ITEM_NAME_TO_ID);  }

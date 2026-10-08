@@ -1,12 +1,13 @@
 // ============================================================
-//  interaction.js — копание, установка блоков, рамки
+//  interaction.js — копание, установка, ловля рыбы
+//  Y-ВВЕРХ во всех координатах.
 // ============================================================
 
 function getTargetTile() {
   const pcx = player.x + player.width  / 2;
   const pcy = player.y + player.height / 2;
-  const cursorWorldX = mouse.wx + camera.x;
-  const cursorWorldY = mouse.wy + camera.y;
+  const cursorWorldX = mouse.wx;
+  const cursorWorldY = mouse.wy;
   const pBx = Math.floor(pcx / TILE_SIZE);
   const pBy = Math.floor(pcy / TILE_SIZE);
   const r = INTERACTION_RANGE_TILES;
@@ -28,21 +29,23 @@ function getTargetTile() {
 
 function getCursorTile() {
   return {
-    bx: Math.floor((mouse.wx + camera.x) / TILE_SIZE),
-    by: Math.floor((mouse.wy + camera.y) / TILE_SIZE),
+    bx: Math.floor(mouse.wx / TILE_SIZE),
+    by: Math.floor(mouse.wy / TILE_SIZE),
   };
 }
 
 function blockOverlapsPlayer(bx, by) {
-  const bL = bx * TILE_SIZE, bT = by * TILE_SIZE;
-  const bR = bL + TILE_SIZE,  bB = bT + TILE_SIZE;
+  const bL = bx * TILE_SIZE, bB = by * TILE_SIZE;
+  const bR = bL + TILE_SIZE,  bT = bB + TILE_SIZE;
   return !(player.x + player.width <= bL || player.x >= bR ||
-           player.y + player.height <= bT || player.y >= bB);
+           player.y + player.height <= bB || player.y >= bT);
 }
 
 function tryPlaceBlock() {
   const item = slots[activeSlot];
   if (!item) return;
+  if (item.tileId < 0) return;
+
   const target = getTargetTile();
   if (!target) return;
   if (getTile(target.bx, target.by) !== TILE_AIR) return;
@@ -53,21 +56,18 @@ function tryPlaceBlock() {
   hasUnsavedChanges = true;
 }
 
-// ------------------------------------------------------------
-// Время копания блока с учётом текущего инструмента.
-// Сейчас инструментов нет — всегда работаем «руками»,
-// то есть с множителем HAND_MULTIPLIER.
-// ------------------------------------------------------------
+function handleEmptyRightClick() {
+  if (tryCatchFish()) return true;
+  return false;
+}
+
 function getToolMultiplier(tileId) {
   const def = TILE_DEFS[tileId];
   if (!def) return HAND_MULTIPLIER;
-
-  // Ищем инструмент в руке (сейчас всегда null — задел на будущее)
   const item = slots[activeSlot];
   const heldTool = (item && item.toolType) ? item.toolType : null;
-
   if (!heldTool) return HAND_MULTIPLIER;
-  if (heldTool === def.tool) return 1;              // правильный инструмент
+  if (heldTool === def.tool) return 1;
   return WRONG_TOOL_MULTIPLIER;
 }
 
@@ -79,23 +79,18 @@ function updateBreaking() {
   if (tile === TILE_AIR || !TILE_DEFS[tile] || !TILE_DEFS[tile].breakable) {
     breakingBlock = null; breakingProgress = 0; return;
   }
-
   if (!breakingBlock || breakingBlock.bx !== target.bx || breakingBlock.by !== target.by) {
     breakingBlock = { bx: target.bx, by: target.by };
     breakingProgress = 0;
   }
-
-  // Скорость копания: 1 / (hardness * множитель * TICK_RATE)
   const def = TILE_DEFS[tile];
   const mult = getToolMultiplier(tile);
   const perTick = 1 / (def.hardness * mult * TICK_RATE);
   breakingProgress += perTick;
-
   if (breakingProgress >= 1) {
-    // Дроп: у травы это земля, у камня — камень
     const dropId = def.drop;
     if (dropId !== null && Math.random() < def.dropChance) {
-      tryAddToInventory(dropId);
+      tryAddItemToInventory(dropId, 1);
     }
     setTile(breakingBlock.bx, breakingBlock.by, TILE_AIR);
     breakingBlock = null;

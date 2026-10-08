@@ -1,36 +1,35 @@
 // ============================================================
 //  walls.js — слой стен (задний фон)
+//  Публично Y-ВВЕРХ (как world.js).
 // ============================================================
 
 const wallChunks = new Map();
-
 function wallChunkKey(cx, cy) { return cx + ',' + cy; }
 
-// ------------------------------------------------------------
-// ГЕНЕРАЦИЯ СТЕН
-// Стены идут за землёй/камнем/бедроком. За рудой (когда появится) — тоже камень.
-// ------------------------------------------------------------
+// Генерация стены для клетки (в публичном Y-вверх).
 function generateWallChunk(cx, cy) {
   const data = [];
   for (let ly = 0; ly < CHUNK_H; ly++) {
     const row = [];
-    const wy = cy * CHUNK_H + ly;
+    const wyInternal = cy * CHUNK_H + ly;
+    const wyDisplay  = toDisplayY(wyInternal);
     for (let lx = 0; lx < CHUNK_W; lx++) {
       const wx = cx * CHUNK_W + lx;
       let wall = WALL_AIR;
+      const surfaceY = getSurfaceHeight(wx);
 
-      if (cy === 0) {
-        const surfaceY = getSurfaceHeight(wx);
-        if (wy >= surfaceY && wy <= surfaceY + 4) {
-          wall = WALL_DIRT;
-        } else if (wy > surfaceY + 4 && wy <= 38) {
-          wall = WALL_STONE;
-        } else if (wy === 39) {
-          wall = WALL_BEDROCK;
-        }
-      } else if (cy > 0) {
+      if (wyDisplay <= WORLD_BOTTOM_Y) {
+        // Бедрок и ниже
         wall = WALL_BEDROCK;
+      } else if (wyDisplay <= surfaceY && wyDisplay >= surfaceY - 4) {
+        // Земля и трава — земляная стена
+        wall = WALL_DIRT;
+      } else if (wyDisplay < surfaceY - 4) {
+        // Камень — каменная стена
+        wall = WALL_STONE;
       }
+      // Выше поверхности — WALL_AIR
+
       row.push(wall);
     }
     data.push(row);
@@ -46,18 +45,20 @@ function getWallChunk(cx, cy) {
 }
 
 function getWall(bx, by) {
+  const internalY = toInternalY(by);
   const cx = Math.floor(bx / CHUNK_W);
-  const cy = Math.floor(by / CHUNK_H);
+  const cy = Math.floor(internalY / CHUNK_H);
   const lx = bx - cx * CHUNK_W;
-  const ly = by - cy * CHUNK_H;
+  const ly = internalY - cy * CHUNK_H;
   return getWallChunk(cx, cy)[ly][lx];
 }
 
 function setWall(bx, by, wall) {
+  const internalY = toInternalY(by);
   const cx = Math.floor(bx / CHUNK_W);
-  const cy = Math.floor(by / CHUNK_H);
+  const cy = Math.floor(internalY / CHUNK_H);
   const lx = bx - cx * CHUNK_W;
-  const ly = by - cy * CHUNK_H;
+  const ly = internalY - cy * CHUNK_H;
   getWallChunk(cx, cy)[ly][lx] = wall;
   hasUnsavedChanges = true;
 }

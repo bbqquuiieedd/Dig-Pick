@@ -2,21 +2,9 @@
 //  game.js — точка входа, игровой цикл, обработка Esc
 // ============================================================
 
-// ------------------------------------------------------------
-// ОБРАБОТКА ESC
-// Логика:
-//   - если инвентарь открыт → закрыть инвентарь
-//   - иначе если в игре → открыть паузу
-//   - в паузе → продолжить
-//   - в настройках → назад
-//   - в главном меню → ничего
-// ------------------------------------------------------------
 function handleEscape() {
-  // Если открыта консоль — Esc закрывает её (это уже внутри consoleHandleKey),
-  // до handleEscape дело не дойдёт. Но на всякий случай:
   if (consoleOpen) return;
 
-  // ... дальше как было
   const pauseCodes = settings.bindings.game.pause || ['Escape'];
   let escPressed = false;
   for (const code of pauseCodes) {
@@ -36,32 +24,19 @@ function handleEscape() {
   }
 }
 
-// ------------------------------------------------------------
-// ХОТКЕИ ИГРЫ — обрабатываются ОДИН раз за кадр,
-// а не в тике. Иначе при 2+ тиках за кадр действие сработает дважды.
-// ------------------------------------------------------------
 function handleGameHotkeys() {
   if (consoleOpen) return;
-  // ... дальше как было
   if (gameState !== 'playing') return;
 
-  // Инвентарь — toggle. Работает и на открытие, и на закрытие.
   if (wasActionJustPressed('game', 'inventory')) {
     toggleInventory();
   }
-
-  // Если инвентарь открыт — остальные хоткеи заблокированы
   if (inventoryOpen) return;
-
-  // Ручное сохранение
   if (wasActionJustPressed('game', 'save')) {
     saveGame();
   }
 }
 
-// ------------------------------------------------------------
-// ТИК ОБНОВЛЕНИЯ (60 раз в секунду)
-// ------------------------------------------------------------
 function updateTick() {
   if (gameState !== 'playing') return;
   if (consoleOpen) return;
@@ -71,7 +46,11 @@ function updateTick() {
   updateCamera();
   updateBreaking();
 
-  // Автосейв — по таймеру, без justPressed
+  waterTickCounter = (waterTickCounter + 1) % WATER_FLOW_DELAY;
+  if (waterTickCounter === 0) updateWater();
+
+  updateFish();
+
   if (settings.autosaveInterval > 0) {
     const now = performance.now();
     if (now - lastAutosaveTime >= settings.autosaveInterval) {
@@ -81,50 +60,51 @@ function updateTick() {
   }
 }
 
-// ------------------------------------------------------------
-// ОТРИСОВКА КАДРА
-// ------------------------------------------------------------
 function draw(now) {
+  // Фон с запасом за края: даже если canvas чуть меньше viewport,
+  // цветных полос не будет — они закрашиваются этим прямоугольником.
+  ctx.fillStyle = '#87CEEB';
+  ctx.fillRect(-4, -4, UI_W + 8, UI_H + 8);
 
-    if (gameState === 'main_menu') {
-    drawMainMenu(now);
+  hoveredButton = null;
+
+  if (gameState === 'main_menu') {
+    withUIScale(() => drawMainMenu(now));
   } else if (gameState === 'settings') {
-    drawSettings();
+    withUIScale(() => drawSettings());
   } else if (gameState === 'paused') {
     drawWorld();
-    drawPause();
+    withUIScale(() => drawPause());
   } else if (gameState === 'playing') {
     drawWorld();
-    drawInventoryUI();
-    drawDraggingItem();
+    withUIScale(() => {
+      drawInventoryUI();
+      drawDraggingItem();
+      drawHealthAndAir();
+      drawChatOverlay();
+    });
   }
 
   if (gameState === 'playing' || gameState === 'paused') {
-    drawFpsOverlay();
-    drawHintsOverlay();
-    drawSaveIcon(now);
-    drawChatOverlay();
+    withUIScale(() => {
+      drawFpsOverlay();
+      drawHintsOverlay();
+      drawSaveIcon(now);
+    });
   }
 
-  if (confirmDialog) drawConfirmDialog();
-  if (consoleOpen) drawConsole();
+  if (debugOverlay) drawDebug();
+
+  if (confirmDialog) withUIScale(() => drawConfirmDialog());
+  if (consoleOpen)  withUIScale(() => drawConsole());
 }
 
-// ------------------------------------------------------------
-// ИГРОВОЙ ЦИКЛ (фиксированный шаг физики)
-// ------------------------------------------------------------
 function gameLoop(now) {
-  // 1) Обрабатываем все "just pressed" события ОДИН раз за кадр.
-  //    Здесь же — Esc и хоткеи игры (E, Tab, I, F4).
+  checkResize();        // ← ДОБАВЬ ЭТУ СТРОКУ — ловит Ctrl+±
   handleEscape();
   handleGameHotkeys();
-
-  // 2) Очищаем уже обработанные нажатия. Всё, что придёт после этой строки
-  //    (ввод с клавиатуры асинхронный), будет обработано в СЛЕДУЮЩЕМ кадре —
-  //    ничего не потеряется.
   justPressedKeys.clear();
 
-  // 3) Физика с фиксированным шагом
   if (lastTime === 0) lastTime = now;
   let delta = now - lastTime;
   lastTime = now;
@@ -136,29 +116,25 @@ function gameLoop(now) {
     accumulator -= TICK_DURATION;
   }
 
-  // 4) Отрисовка
   draw(now);
 
-  // 5) Hover-эффект (для следующего кадра)
+  if (confirmDialog || gameState === 'main_menu' || gameState === 'paused' || gameState === 'settings') {
+    handleMenuNavigation();
+  }
+
   if (gameState !== 'playing' || inventoryOpen) {
-    const el = findUIAt(mouse.x, mouse.y);
+    const el = findUIAt(mouse.ux, mouse.uy);
     if (el) hoveredButton = el;
   }
 
   updateFpsCounter(now);
-
   requestAnimationFrame(gameLoop);
 }
 
-// ------------------------------------------------------------
-// СТАРТ
-// ------------------------------------------------------------
 async function startGame() {
   loadSettings();
   await loadAllTextures();
 
-  // Явно дожидаемся загрузки шрифта, чтобы canvas сразу рисовал им,
-  // а не системным fallback'ом на первом кадре.
   try {
     await document.fonts.load('16px ' + FONT_FAMILY);
     await document.fonts.load('26px ' + FONT_FAMILY);
